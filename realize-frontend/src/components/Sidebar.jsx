@@ -3,24 +3,19 @@ import { useState } from "react";
 
 const Sidebar = ({ userRole = "employee", userName = "User", userEmail = "user@example.com" }) => {
   const location = useLocation();
-  const [isCollapsed, setIsCollapsed] = useState(false);
+  const [isCollapsed, setIsCollapsed] = useState(userRole === "admin" ? false : false); // Always expanded for admin
   const [activeSubmenu, setActiveSubmenu] = useState(null);
 
   // Navigation items based on role
   const navigationItems = {
     admin: [
       { id: "dashboard", path: "/", label: "Dashboard", icon: "📊" },
-      { id: "employees", path: "/employees", label: "Employees", icon: "👥" },
-      { 
-        id: "attendance", 
-        path: "/attendance", 
-        label: "Attendance", 
-        icon: "🕒",
-        submenu: [
-          { path: "/attendance/records", label: "All Records" },
-          { path: "/attendance/reports", label: "Reports" },
-          { path: "/attendance/overtime", label: "Overtime" }
-        ]
+      { id: "employees", path: "/create-employee", label: "Create Employee", icon: "👥" },
+      {
+        id: "attendance",
+        path: "/attendance",
+        label: "My Attendance",
+        icon: "🕒"
       },
       { 
         id: "leave", 
@@ -28,7 +23,7 @@ const Sidebar = ({ userRole = "employee", userName = "User", userEmail = "user@e
         label: "Leave Management", 
         icon: "📅",
         submenu: [
-          { path: "/leave/requests", label: "All Requests" },
+          { path: "/all-requests", label: "All Requests" },
           { path: "/leave/approvals", label: "Approvals" },
           { path: "/leave/reports", label: "Reports" }
         ]
@@ -43,23 +38,30 @@ const Sidebar = ({ userRole = "employee", userName = "User", userEmail = "user@e
           { path: "/justification/history", label: "History" }
         ]
       },
+      { 
+        id: "superior-management", 
+        path: "/admin/superior-management", 
+        label: "Superior Management", 
+        icon: "👑" 
+      },
       { id: "reports", path: "/reports", label: "Analytics", icon: "📈" },
       { id: "settings", path: "/settings", label: "Settings", icon: "⚙️" }
     ],
     superior: [
       { id: "dashboard", path: "/", label: "Dashboard", icon: "📊" },
-      { id: "team", path: "/team", label: "My Team", icon: "👥" },
+      { id: "team", path: "/superior/team", label: "My Team", icon: "👥" },
       { id: "attendance", path: "/attendance", label: "Attendance", icon: "🕒" },
-      { id: "leave", path: "/leave", label: "Leave Approvals", icon: "📅" },
-      { id: "justification", path: "/justification", label: "Justifications", icon: "📝" },
-      { id: "reports", path: "/reports", label: "Team Reports", icon: "📈" }
+      { id: "leave", path: "/superior/leaves-approval", label: "Leave Approvals", icon: "📅" },
+      { id: "justification", path: "/superior/justifications-approval", label: "Justifications Approvals", icon: "📝" },
+      { id: "reports", path: "/superior/reports", label: "Team Reports", icon: "📈" },
+      { id: "allrequests", path: "/all-requests", label: "All Requests", icon: "📋" }
     ],
     employee: [
       { id: "dashboard", path: "/", label: "Dashboard", icon: "📊" },
       { id: "attendance", path: "/attendance", label: "My Attendance", icon: "🕒" },
       { id: "leave", path: "/leave", label: "My Leave", icon: "📅" },
       { id: "justification", path: "/justification", label: "My Justifications", icon: "📝" },
-      { id: "profile", path: "/profile", label: "Profile", icon: "👤" }
+      // { id: "profile", path: "/profile", label: "Profile", icon: "👤" }
     ]
   };
 
@@ -87,13 +89,15 @@ const Sidebar = ({ userRole = "employee", userName = "User", userEmail = "user@e
             Realize
           </h2>
         )}
-        <button
-          onClick={() => setIsCollapsed(!isCollapsed)}
-          className="p-1 rounded hover:bg-gray-700 transition-colors"
-          title={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
-        >
-          {isCollapsed ? "➡️" : "⬅️"}
-        </button>
+        {userRole !== "admin" && (
+          <button
+            onClick={() => setIsCollapsed(!isCollapsed)}
+            className="p-1 rounded hover:bg-gray-700 transition-colors"
+            title={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+          >
+            {isCollapsed ? "➡️" : "⬅️"}
+          </button>
+        )}
       </div>
 
       {/* User Profile */}
@@ -117,7 +121,7 @@ const Sidebar = ({ userRole = "employee", userName = "User", userEmail = "user@e
       )}
 
       {/* Navigation */}
-      <nav className="flex-1 overflow-y-auto py-4">
+      <nav className="flex-1 overflow-y-auto py-4 scrollbar-hide">
         <ul className="space-y-1 px-2">
           {currentNavItems.map((item) => (
             <li key={item.id}>

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import API from "../api";
+import { toast } from "react-toastify";
 
 const ForgotPassword = () => {
   const [email, setEmail] = useState("");
@@ -8,10 +9,13 @@ const ForgotPassword = () => {
   const handleRequest = async () => {
     try {
       await API.post("/auth/forgot-password", { email });
-      setMessage("Password request sent to the admin.");
+      toast.success("Password request sent to the admin.");
+      setMessage(""); // Clear any previous message
     } catch (err) {
       console.error(err);
-      setMessage(err.response?.data?.error || "Failed to send request.");
+      const errorMessage = err.response?.data?.error || "Failed to send request.";
+      toast.error(errorMessage);
+      setMessage(errorMessage);
     }
   };
 

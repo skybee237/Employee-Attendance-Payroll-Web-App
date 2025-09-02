@@ -1,11 +1,12 @@
 const express = require("express");
 const router = express.Router();
+const { verifyToken } = require("../middleware/authMiddleware");
 const { submitLeave, getEmployeeLeaves } = require("../controllers/leaveController");
 
 // Submit a leave request
-router.post("/:employeeId", submitLeave);
+router.post("/:employeeId", verifyToken, submitLeave);
 
 // Get all leaves of an employee
-router.get("/:employeeId", getEmployeeLeaves);
+router.get("/:employeeId", verifyToken, getEmployeeLeaves);
 
 module.exports = router;

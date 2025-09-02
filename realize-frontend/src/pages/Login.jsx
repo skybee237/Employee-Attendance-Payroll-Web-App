@@ -1,10 +1,11 @@
 import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import API from "../api";
+import { toast } from "react-toastify";
 import { Eye, EyeOff, MapPin, Shield, User, AlertCircle } from "lucide-react";
 
-const SITE_LOCATION = { lat: 5.614818, lng: -0.205874 };
-const MAX_DISTANCE_METERS = 50;
+const SITE_LOCATION = { lat: 3.8370057, lng: 11.5335042 }; // Yaoundé, Cameroon
+const MAX_DISTANCE_METERS = 3867;
 const COMPANY_NAME = "Realize HR System";
 
 function getDistanceFromLatLonInMeters(lat1, lon1, lat2, lon2) {
@@ -21,7 +22,7 @@ function getDistanceFromLatLonInMeters(lat1, lon1, lat2, lon2) {
   return R * c;
 }
 
-const Login = () => {
+const Login = ({ setEmployeeId, setRole, setUserEmail }) => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -41,10 +42,10 @@ const Login = () => {
 
   const handleLogin = async (e) => {
     e.preventDefault();
-    
+
     // Reset error state
     setError("");
-    
+
     // Comprehensive validation
     if (!email || !password) {
       setError("Please fill in all fields");
@@ -62,129 +63,152 @@ const Login = () => {
     }
 
     setLoading(true);
-    setLocationStatus("Getting your location...");
+    setLocationStatus("Checking user role...");
 
-    if (!navigator.geolocation) {
-      setError("Geolocation is not supported by your browser");
-      setLoading(false);
-      return;
-    }
+    try {
+      // Get user role first
+      const roleRes = await API.post("/api/auth/getRole", { email });
+      const role = roleRes.data;
+      console.log("User role:", role);
 
-    navigator.geolocation.getCurrentPosition(
-      async (position) => {
-        const { latitude, longitude } = position.coords;
-        setLocationStatus("Checking location...");
+      // Admin login (anywhere) - no location required
+      if (role === "admin") {
+        setLocationStatus("Admin login detected...");
+        const loginRes = await API.post("/api/auth/login", { email, password });
+        console.log("Admin login successful");
+        localStorage.setItem("token", loginRes.data.token);
+        localStorage.setItem("userRole", role);
+        localStorage.setItem("userEmail", email);
+        localStorage.setItem("employeeId", loginRes.data.employeeId);
+        localStorage.setItem("userName", loginRes.data.name || email.split('@')[0]);
+        // Update App.jsx state
+        setEmployeeId(loginRes.data.employeeId);
+        setRole(role);
+        setUserEmail(email);
+        console.log("About to navigate to /admin");
+        navigate("/admin", { replace: true });
+        console.log("Navigation called, should redirect now");
+        return;
+      }
 
-        try {
-          console.log("Attempting login with:", { email, latitude, longitude });
-          
-          // Get user role first
-          const roleRes = await API.post("/auth/getRole", { email });
-          const role = roleRes.data;
-          console.log("User role:", role);
+      // Employee/Superior login requires location check
+      setLocationStatus("Getting your location...");
 
-          // Admin login (anywhere)
-          if (role === "admin") {
-            setLocationStatus("Admin login detected...");
-            const loginRes = await API.post("/auth/login", { email, password });
-                    console.log("Admin login successful");
-                    localStorage.setItem("token", loginRes.data.token);
-                    localStorage.setItem("userRole", role);
-                    localStorage.setItem("userEmail", email);
-                    navigate("/admin", { replace: true });
-            return;
+      if (!navigator.geolocation) {
+        setError("Geolocation is not supported by your browser");
+        setLoading(false);
+        return;
+      }
+
+      navigator.geolocation.getCurrentPosition(
+        async (position) => {
+          const { latitude, longitude } = position.coords;
+          setLocationStatus("Checking location...");
+
+          try {
+            console.log("Attempting login with:", { email, latitude, longitude });
+
+            // Employee login requires location check
+            const distance = getDistanceFromLatLonInMeters(
+              latitude,
+              longitude,
+              SITE_LOCATION.lat,
+              SITE_LOCATION.lng
+            );
+
+            setLocationStatus(`You are ${Math.round(distance)}m from site`);
+
+            if (distance > MAX_DISTANCE_METERS) {
+              setError(`You must be within ${MAX_DISTANCE_METERS}m of the site to login. Current distance: ${Math.round(distance)}m`);
+              setLoading(false);
+              return;
+            }
+            const loginRes = await API.post("/api/auth/login", {
+              email,
+              password,
+              latitude,
+              longitude,
+            });
+
+            if (role === "superior") {
+              console.log("Superior login successful");
+            } else {
+              console.log("Employee login successful");
+            }
+            localStorage.setItem("token", loginRes.data.token);
+            localStorage.setItem("userRole", role);
+            localStorage.setItem("userEmail", email);
+            localStorage.setItem("employeeId", loginRes.data.employeeId);
+            localStorage.setItem("userName", loginRes.data.name || email.split('@')[0]);
+            // Update App.jsx state
+            setEmployeeId(loginRes.data.employeeId);
+            setRole(role);
+            setUserEmail(email);
+
+            // Redirect based on role
+            navigate("/", { replace: true });
+
           }
+          catch (err) {
+            console.error("Login error details:", {
+              status: err.response?.status,
+              data: err.response?.data,
+              message: err.message
+            });
 
-          // Employee login requires location check
-          const distance = getDistanceFromLatLonInMeters(
-            latitude,
-            longitude,
-            SITE_LOCATION.lat,
-            SITE_LOCATION.lng
-          );
+            const errorMessage = err.response?.data?.error ||
+                               err.response?.data?.message ||
+                               "Login failed. Please check your credentials and try again.";
 
-          setLocationStatus(`You are ${Math.round(distance)}m from site`);
-
-          if (distance > MAX_DISTANCE_METERS) {
-            setError(`You must be within ${MAX_DISTANCE_METERS}m of the site to login. Current distance: ${Math.round(distance)}m`);
+            setError(errorMessage);
+          } finally {
             setLoading(false);
-            return;
+            setLocationStatus("");
+          }
+        },
+        (err) => {
+          console.error("Geolocation error:", err);
+          let geoError = "Location access is required to login. Please enable location services.";
+
+          switch(err.code) {
+            case err.PERMISSION_DENIED:
+              geoError = "Location access denied. Please enable location permissions in your browser settings.";
+              break;
+            case err.POSITION_UNAVAILABLE:
+              geoError = "Location information unavailable. Please check your internet connection.";
+              break;
+            case err.TIMEOUT:
+              geoError = "Location request timed out. Please try again.";
+              break;
           }
 
-          const loginRes = await API.post("/auth/login", {
-            email,
-            password,
-            latitude,
-            longitude,
-          });
-
-          console.log("Employee login successful");
-          localStorage.setItem("token", loginRes.data.token);
-          localStorage.setItem("userRole", role);
-          localStorage.setItem("userEmail", email);
-
-          // Redirect based on role
-          if (role === "superior") {
-            navigate("/superior");
-          } else {
-            navigate("/");
-          }
-
-        } catch (err) {
-          console.error("Login error details:", {
-            status: err.response?.status,
-            data: err.response?.data,
-            message: err.message
-          });
-          
-          const errorMessage = err.response?.data?.error || 
-                             err.response?.data?.message || 
-                             "Login failed. Please check your credentials and try again.";
-          
-          setError(errorMessage);
-        } finally {
+          setError(geoError);
           setLoading(false);
           setLocationStatus("");
+        },
+        {
+          enableHighAccuracy: true,
+          timeout: 10000,
+          maximumAge: 300000
         }
-      },
-      (err) => {
-        console.error("Geolocation error:", err);
-        let geoError = "Location access is required to login. Please enable location services.";
-        
-        switch(err.code) {
-          case err.PERMISSION_DENIED:
-            geoError = "Location access denied. Please enable location permissions in your browser settings.";
-            break;
-          case err.POSITION_UNAVAILABLE:
-            geoError = "Location information unavailable. Please check your internet connection.";
-            break;
-          case err.TIMEOUT:
-            geoError = "Location request timed out. Please try again.";
-            break;
-        }
-        
-        setError(geoError);
-        setLoading(false);
-        setLocationStatus("");
-      },
-      {
-        enableHighAccuracy: true,
-        timeout: 10000,
-        maximumAge: 300000
-      }
-    );
+      );
+    } catch (err) {
+      console.error("Role check error:", err);
+      const errorMessage = err.response?.data?.error ||
+                         err.response?.data?.message ||
+                         "Failed to check user role. Please try again.";
+      setError(errorMessage);
+      setLoading(false);
+      setLocationStatus("");
+    }
   };
 
-  const handleDemoLogin = (role) => {
-    setEmail(`${role}@demo.com`);
-    setPassword("demo123");
-  };
   const handlePasswordResetRequest = async () => {
     try {
-      const res = await API.post("/password/request", { email });
-      alert(res.data.message || "Password reset request sent to admin");
+      const res = await API.post("/api/password/request", { email });
+      toast.success(res.data.message || "Password reset request sent to admin");
     } catch (err) {
-      alert(err.response?.data?.error || "Failed to request password reset");
+      toast.error(err.response?.data?.error || "Failed to request password reset");
     }
   };
 
@@ -292,32 +316,7 @@ const Login = () => {
                 "Sign In"
               )}
             </button>
-          </form>
-
-          {/* Demo Accounts */}
-          <div className="mt-6">
-            <p className="text-sm text-gray-600 text-center mb-3">Demo Accounts:</p>
-            <div className="grid grid-cols-3 gap-2">
-              <button
-                onClick={() => handleDemoLogin("admin")}
-                className="px-3 py-2 text-xs bg-purple-100 text-purple-700 rounded hover:bg-purple-200 transition-colors"
-              >
-                Admin
-              </button>
-              <button
-                onClick={() => handleDemoLogin("superior")}
-                className="px-3 py-2 text-xs bg-blue-100 text-blue-700 rounded hover:bg-blue-200 transition-colors"
-              >
-                Superior
-              </button>
-              <button
-                onClick={() => handleDemoLogin("employee")}
-                className="px-3 py-2 text-xs bg-green-100 text-green-700 rounded hover:bg-green-200 transition-colors"
-              >
-                Employee
-              </button>
-            </div>
-          </div>
+          </form> 
 
           {/* Footer Links */}
           <div className="mt-6 text-center">

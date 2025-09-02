@@ -1,9 +1,11 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import API from "../api";
 import Card from "../components/Card";
 import { toast } from "react-toastify";
 
 const AdminDashboard = () => {
+  const navigate = useNavigate();
   const [stats, setStats] = useState({
     employeeCount: 0,
     pendingLeaves: 0,
@@ -16,10 +18,10 @@ const AdminDashboard = () => {
   const [recentActivities, setRecentActivities] = useState([]);
   const [passwordRequests, setPasswordRequests] = useState([]);
   const [quickActions] = useState([
-    { id: 1, title: "Manage Employees", icon: "👥", path: "/admin/employees", color: "blue" },
-    { id: 2, title: "Review Leaves", icon: "📋", path: "/admin/leaves", color: "yellow" },
-    { id: 3, title: "Process Justifications", icon: "📝", path: "/admin/justifications", color: "red" },
-    { id: 4, title: "Password Requests", icon: "🔐", path: "/admin/password-requests", color: "purple" },
+    { id: 1, title: "Create Employee", icon: "👥", path: "/create-employee", color: "blue" },
+    { id: 2, title: "Manage Superior Requests", icon: "📋", path: "/admin/superior-management", color: "yellow" },
+    { id: 3, title: "Process Justifications", icon: "📝", path: "/admin/justifications-management", color: "red" },
+    { id: 4, title: "Password Requests", icon: "🔐", path: "#", color: "purple" },
     { id: 5, title: "Reports", icon: "📊", path: "/admin/reports", color: "green" }
   ]);
 
@@ -29,17 +31,17 @@ const AdminDashboard = () => {
       
       // Using Promise.all to fetch all data in parallel
       const [
-        employeesRes, 
-        leavesRes, 
+        employeesRes,
+        leavesRes,
         justificationsRes,
         attendanceRes,
         passwordRequestsRes
       ] = await Promise.all([
-        API.get("/admin/employees"),
-        API.get("/leave"),
-        API.get("/justification"),
-        API.get("/attendance/today"),
-        API.get("/password/pending")
+        API.get("/api/admin/employees"),
+        API.get("/api/admin/leaves"),
+        API.get("/api/admin/justifications"),
+        API.get("/api/attendance/today/all"),
+        API.get("/api/password/pending")
       ]);
 
       const employees = employeesRes.data;
@@ -110,8 +112,18 @@ const AdminDashboard = () => {
   };
 
   const handleQuickAction = (action) => {
-    toast.info(`Navigating to ${action.path}`);
-    console.log("Navigating to:", action.path);
+    if (action.path === "#") {
+      // Scroll to password requests section
+      const element = document.getElementById("password-requests-section");
+      if (element) {
+        element.scrollIntoView({ behavior: "smooth" });
+      }
+      toast.info("Viewing password requests below");
+    } else {
+      toast.info(`Navigating to ${action.path}`);
+      console.log("Navigating to:", action.path);
+      navigate(action.path);
+    }
   };
 
   const approvePasswordRequest = async (id) => {
@@ -299,7 +311,7 @@ const AdminDashboard = () => {
         </div>
 
         {/* Password Requests */}
-        <div className="bg-white rounded-lg shadow p-5">
+        <div id="password-requests-section" className="bg-white rounded-lg shadow p-5">
           <h2 className="text-xl font-semibold mb-4 text-gray-800">Pending Password Requests</h2>
           
           {passwordRequests.length === 0 ? (
@@ -357,7 +369,7 @@ const AdminDashboard = () => {
             )}
             <button 
               className="px-4 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 transition-colors text-sm"
-              onClick={() => handleQuickAction({ path: "/admin/pending" })}
+              onClick={() => handleQuickAction({ path: "/all-requests" })}
             >
               Review All Pending Items
             </button>

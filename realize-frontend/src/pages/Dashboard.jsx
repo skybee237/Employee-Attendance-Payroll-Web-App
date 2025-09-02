@@ -43,16 +43,16 @@ const Dashboard = ({ employeeId }) => {
   // Fetch summary stats with better error handling
   const fetchStats = useCallback(async () => {
     try {
-      const [attendanceRes, leavesRes, justificationsRes] = await Promise.all([
-        API.get(`/attendance/${employeeId}`),
-        API.get(`/leave/${employeeId}`),
-        API.get(`/justification/${employeeId}`)
+      const [attendanceRes, leavesRes, justificationsRes] = await Promise.allSettled([
+        API.get(`/api/attendance/${employeeId}`),
+        API.get(`/api/leave/${employeeId}`),
+        API.get(`/api/justification/${employeeId}`)
       ]);
 
       setStats({
-        attendanceCount: attendanceRes.data?.length || 0,
-        leaveCount: leavesRes.data?.length || 0,
-        justificationCount: justificationsRes.data?.length || 0
+        attendanceCount: attendanceRes.status === 'fulfilled' ? (attendanceRes.value.data?.length || 0) : 0,
+        leaveCount: leavesRes.status === 'fulfilled' ? (leavesRes.value.data?.length || 0) : 0,
+        justificationCount: justificationsRes.status === 'fulfilled' ? (justificationsRes.value.data?.length || 0) : 0
       });
     } catch (err) {
       handleError(err, "fetching statistics");
@@ -62,15 +62,15 @@ const Dashboard = ({ employeeId }) => {
   // Fetch today's attendance with improved logic
   const fetchTodayAttendance = useCallback(async () => {
     try {
-      const res = await API.get(`/attendance/today/${employeeId}`);
+      const res = await API.get(`/api/attendance/${employeeId}`);
       if (res.data) {
         setTodayAttendance(res.data);
-        
+
         // More robust overtime detection
         const now = new Date();
         const expectedEnd = new Date(res.data.expectedEnd);
         const hasCheckedOut = res.data.checkOut || res.data.overtimeCheckedOut;
-        
+
         setIsOvertime(now > expectedEnd && !hasCheckedOut && !res.data.overtimeStarted);
       } else {
         setTodayAttendance(null);
@@ -85,7 +85,7 @@ const Dashboard = ({ employeeId }) => {
   const handleOvertimeCheckIn = async () => {
     setActionLoading(prev => ({ ...prev, overtime: true }));
     try {
-      await API.post(`/attendance/overtime/${employeeId}`);
+      await API.post(`/api/attendance/overtime/${employeeId}`);
       await fetchTodayAttendance();
       handleSuccess("Overtime started successfully!");
     } catch (err) {
@@ -146,7 +146,7 @@ const Dashboard = ({ employeeId }) => {
       
       setActionLoading(prev => ({ ...prev, leave: true }));
       try {
-        await API.post(`/leave/${employeeId}`, { reason });
+        await API.post(`/api/leave/${employeeId}`, { reason });
         await fetchStats();
         handleSuccess("Leave request submitted successfully!");
       } catch (err) {
@@ -208,7 +208,7 @@ const Dashboard = ({ employeeId }) => {
       
       setActionLoading(prev => ({ ...prev, justification: true }));
       try {
-        await API.post(`/justification/${employeeId}`, { reason });
+        await API.post(`/api/justification/${employeeId}`, { reason });
         await fetchStats();
         handleSuccess("Justification submitted successfully!");
       } catch (err) {

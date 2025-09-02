@@ -1,21 +1,21 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useLocation } from "react-router-dom";
+import API from "../api";
+import { toast } from "react-toastify";
 
-const Navbar = ({ 
-  userName = "User", 
-  userRole = "employee", 
+const Navbar = ({
+  userName = "User",
+  userRole = "employee",
   userEmail = "user@example.com",
+  profilePicture = null,
   onLogout = () => console.log("Logout clicked"),
   onProfile = () => console.log("Profile clicked")
 }) => {
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [currentTime, setCurrentTime] = useState(new Date());
-  const [notifications, setNotifications] = useState([
-    { id: 1, message: "Leave request approved", time: "2 hours ago", read: false, type: "success" },
-    { id: 2, message: "New justification submitted", time: "5 hours ago", read: false, type: "info" },
-    { id: 3, message: "Attendance reminder", time: "1 day ago", read: true, type: "warning" }
-  ]);
+  const [notifications, setNotifications] = useState([]);
+  const [loadingNotifications, setLoadingNotifications] = useState(false);
   const location = useLocation();
 
   // Update time every minute
@@ -27,12 +27,81 @@ const Navbar = ({
     return () => clearInterval(timer);
   }, []);
 
+  // Fetch notifications from backend
+  const fetchNotifications = useCallback(async () => {
+    setLoadingNotifications(true);
+    try {
+      // This would be replaced with actual API call when backend endpoint is available
+      // const response = await API.get('/notifications');
+      // setNotifications(response.data);
+      
+      // Mock data for now - simulating API response
+      const mockNotifications = [
+        { 
+          id: 1, 
+          message: "Leave request approved", 
+          timestamp: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(), 
+          read: false, 
+          type: "success" 
+        },
+        { 
+          id: 2, 
+          message: "New justification submitted for review", 
+          timestamp: new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString(), 
+          read: false, 
+          type: "info" 
+        },
+        { 
+          id: 3, 
+          message: "Attendance reminder: Don't forget to check out", 
+          timestamp: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(), 
+          read: true, 
+          type: "warning" 
+        }
+      ];
+      setNotifications(mockNotifications);
+    } catch (error) {
+      console.error("Failed to fetch notifications:", error);
+      toast.error("Failed to load notifications");
+    } finally {
+      setLoadingNotifications(false);
+    }
+  }, []);
+
+  // Load notifications when dropdown opens
+  useEffect(() => {
+    if (notificationsOpen && notifications.length === 0) {
+      fetchNotifications();
+    }
+  }, [notificationsOpen, notifications.length, fetchNotifications]);
+
+  // Format relative time
+  const formatRelativeTime = (timestamp) => {
+    const now = new Date();
+    const date = new Date(timestamp);
+    const diffMs = now - date;
+    const diffMins = Math.floor(diffMs / (1000 * 60));
+    const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+    if (diffMins < 1) return "Just now";
+    if (diffMins < 60) return `${diffMins}m ago`;
+    if (diffHours < 24) return `${diffHours}h ago`;
+    if (diffDays < 7) return `${diffDays}d ago`;
+    return date.toLocaleDateString();
+  };
+
   const unreadNotifications = notifications.filter(n => !n.read).length;
 
   const handleNotificationClick = (id) => {
     setNotifications(notifications.map(n => 
       n.id === id ? { ...n, read: true } : n
     ));
+  };
+
+  const handleMarkAllAsRead = () => {
+    setNotifications(notifications.map(n => ({ ...n, read: true })));
+    toast.success("All notifications marked as read");
   };
 
   const getPageTitle = (pathname) => {
@@ -109,7 +178,12 @@ const Navbar = ({
                 <h3 className="font-semibold text-gray-800">Notifications</h3>
               </div>
               <div className="max-h-96 overflow-y-auto">
-                {notifications.length === 0 ? (
+                {loadingNotifications ? (
+                  <div className="p-4 text-center">
+                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600 mx-auto"></div>
+                    <p className="text-sm text-gray-500 mt-2">Loading notifications...</p>
+                  </div>
+                ) : notifications.length === 0 ? (
                   <p className="p-4 text-gray-500 text-center">No notifications</p>
                 ) : (
                   notifications.map((notification) => (
@@ -124,11 +198,14 @@ const Navbar = ({
                         <div className={`w-2 h-2 rounded-full mt-2 ${
                           notification.type === 'success' ? 'bg-green-500' :
                           notification.type === 'warning' ? 'bg-yellow-500' :
+                          notification.type === 'error' ? 'bg-red-500' :
                           'bg-blue-500'
                         } mr-3`}></div>
                         <div className="flex-1">
                           <p className="text-sm text-gray-800">{notification.message}</p>
-                          <p className="text-xs text-gray-500 mt-1">{notification.time}</p>
+                          <p className="text-xs text-gray-500 mt-1">
+                            {formatRelativeTime(notification.timestamp)}
+                          </p>
                         </div>
                       </div>
                     </div>
@@ -136,7 +213,11 @@ const Navbar = ({
                 )}
               </div>
               <div className="p-3 border-t border-gray-200">
-                <button className="text-sm text-blue-600 hover:text-blue-800 w-full text-center">
+                <button 
+                  onClick={handleMarkAllAsRead}
+                  className="text-sm text-blue-600 hover:text-blue-800 w-full text-center"
+                  disabled={unreadNotifications === 0}
+                >
                   Mark all as read
                 </button>
               </div>
@@ -150,9 +231,17 @@ const Navbar = ({
             onClick={() => setIsProfileOpen(!isProfileOpen)}
             className="flex items-center space-x-2 p-2 rounded-lg hover:bg-gray-100 transition-colors"
           >
-            <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center text-white font-semibold text-sm">
-              {userName.charAt(0).toUpperCase()}
-            </div>
+            {profilePicture ? (
+              <img
+                src={profilePicture}
+                alt="Profile"
+                className="w-8 h-8 rounded-full object-cover"
+              />
+            ) : (
+              <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center text-white font-semibold text-sm">
+                {userName.charAt(0).toUpperCase()}
+              </div>
+            )}
             <div className="hidden md:block text-left">
               <p className="text-sm font-medium text-gray-800">{userName}</p>
               <p className="text-xs text-gray-500 capitalize">{userRole}</p>

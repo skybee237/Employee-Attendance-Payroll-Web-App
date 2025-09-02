@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback } from "react";
+import { Eye, EyeOff, Copy, RefreshCw, CheckCircle, AlertCircle, Info } from "lucide-react";
 import API from "../api";
 
 const CreateEmployee = ({ onEmployeeCreated }) => {
-  // Form state with enhanced structure
+  // --- State (form, UI, password options, etc.)
   const [form, setForm] = useState({
     name: "",
     email: "",
@@ -11,10 +12,12 @@ const CreateEmployee = ({ onEmployeeCreated }) => {
     department: "",
     position: "",
     phone: "",
-    startDate: new Date().toISOString().split('T')[0] // Default to today
+    startDate: new Date().toISOString().split("T")[0],
+    password: "",
+    confirmPassword: "",
+    passwordMethod: "generate", // "generate" or "manual"
   });
 
-  // UI state
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
@@ -22,162 +25,128 @@ const CreateEmployee = ({ onEmployeeCreated }) => {
   const [superiors, setSuperiors] = useState([]);
   const [loadingSuperiors, setLoadingSuperiors] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [passwordStrength, setPasswordStrength] = useState({
+    score: 0,
+    feedback: [],
+  });
 
-  // Validation patterns
-  const validationRules = {
-    name: {
-      required: true,
-      minLength: 2,
-      pattern: /^[a-zA-Z\s]+$/,
-      message: "Name must contain only letters and spaces (min 2 characters)"
-    },
-    email: {
-      required: true,
-      pattern: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
-      message: "Please enter a valid email address"
-    },
-    phone: {
-      pattern: /^[\d\-\+\(\)\s]+$/,
-      message: "Please enter a valid phone number"
-    },
-    position: {
-      minLength: 2,
-      message: "Position must be at least 2 characters long"
-    }
+  const [passwordOptions, setPasswordOptions] = useState({
+    length: 12,
+    includeUppercase: true,
+    includeLowercase: true,
+    includeNumbers: true,
+    includeSymbols: true,
+    excludeSimilar: true,
+  });
+
+  // --- Password strength checker
+  const checkPasswordStrength = (password) => {
+    let score = 0;
+    let feedback = [];
+
+    if (password.length >= 8) score++;
+    else feedback.push("At least 8 characters");
+
+    if (/[A-Z]/.test(password)) score++;
+    else feedback.push("Include an uppercase letter");
+
+    if (/[a-z]/.test(password)) score++;
+    else feedback.push("Include a lowercase letter");
+
+    if (/[0-9]/.test(password)) score++;
+    else feedback.push("Include a number");
+
+    if (/[^A-Za-z0-9]/.test(password)) score++;
+    else feedback.push("Include a symbol");
+
+    return { score, feedback };
   };
 
-  // Fetch superiors for dropdown
-  const fetchSuperiors = useCallback(async () => {
-    setLoadingSuperiors(true);
-    try {
-      const res = await API.get("/admin/superiors");
-      setSuperiors(res.data || []);
-    } catch (err) {
-      console.error("Error fetching superiors:", err);
-      // Don't set error for this, as it's optional functionality
-    } finally {
-      setLoadingSuperiors(false);
+  // --- Password generator
+  const generatePassword = useCallback(() => {
+    // Always include required character types for backend validation
+    const upperCase = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    const lowerCase = "abcdefghijklmnopqrstuvwxyz";
+    const numbers = "0123456789";
+    const symbols = "!@#$%^&*()_+[]{}|;:,.<>?";
+
+    let password = "";
+    // Ensure at least one of each required type
+    password += upperCase[Math.floor(Math.random() * upperCase.length)];
+    password += lowerCase[Math.floor(Math.random() * lowerCase.length)];
+    password += numbers[Math.floor(Math.random() * numbers.length)];
+    password += symbols[Math.floor(Math.random() * symbols.length)];
+
+    // Build chars based on options
+    let chars = "";
+    if (passwordOptions.includeUppercase) chars += upperCase;
+    if (passwordOptions.includeLowercase) chars += lowerCase;
+    if (passwordOptions.includeNumbers) chars += numbers;
+    if (passwordOptions.includeSymbols) chars += symbols;
+
+    if (passwordOptions.excludeSimilar) {
+      chars = chars.replace(/[ilLI|oO0]/g, "");
     }
+
+    // Fill remaining length
+    for (let i = 4; i < passwordOptions.length; i++) {
+      password += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+
+    // Shuffle
+    return password.split('').sort(() => Math.random() - 0.5).join('');
+  }, [passwordOptions]);
+
+  // --- Copy helper
+  const copyToClipboard = (text, label) => {
+    navigator.clipboard.writeText(text);
+    setSuccess(`${label} copied to clipboard`);
+    setTimeout(() => setSuccess(null), 2000);
+  };
+
+  // --- Fetch superiors
+  useEffect(() => {
+    const fetchSuperiors = async () => {
+      setLoadingSuperiors(true);
+      try {
+        const response = await API.get("/api/admin/superiors");
+        setSuperiors(response.data);
+      } catch (err) {
+        console.error("Error fetching superiors", err);
+      } finally {
+        setLoadingSuperiors(false);
+      }
+    };
+    fetchSuperiors();
   }, []);
 
-  // Handle error display
-  const handleError = (message, field = null) => {
-    if (field) {
-      setFieldErrors(prev => ({ ...prev, [field]: message }));
-    } else {
-      setError(message);
-      setTimeout(() => setError(null), 5000);
+  // --- Handle input
+  const handleInputChange = (e) => {
+    const { name, value } = e.target;
+    setForm((prev) => ({ ...prev, [name]: value }));
+    if (name === "password" && form.passwordMethod === "manual") {
+      setPasswordStrength(checkPasswordStrength(value));
     }
   };
 
-  // Clear field error
-  const clearFieldError = (field) => {
-    if (fieldErrors[field]) {
-      setFieldErrors(prev => {
-        const newErrors = { ...prev };
-        delete newErrors[field];
-        return newErrors;
-      });
-    }
-  };
-
-  // Validate single field
-  const validateField = (name, value) => {
-    const rule = validationRules[name];
-    if (!rule) return true;
-
-    // Required validation
-    if (rule.required && !value.trim()) {
-      handleError(`${name.charAt(0).toUpperCase() + name.slice(1)} is required`, name);
-      return false;
-    }
-
-    // Skip other validations if field is empty and not required
-    if (!value.trim() && !rule.required) {
-      clearFieldError(name);
-      return true;
-    }
-
-    // MinLength validation
-    if (rule.minLength && value.trim().length < rule.minLength) {
-      handleError(rule.message, name);
-      return false;
-    }
-
-    // Pattern validation
-    if (rule.pattern && !rule.pattern.test(value.trim())) {
-      handleError(rule.message, name);
-      return false;
-    }
-
-    clearFieldError(name);
-    return true;
-  };
-
-  // Validate entire form
-  const validateForm = () => {
-    let isValid = true;
-    const newFieldErrors = {};
-
-    Object.keys(validationRules).forEach(field => {
-      if (!validateField(field, form[field])) {
-        isValid = false;
-      }
-    });
-
-    // Role-specific validation
-    if (form.role === "employee" && !form.superiorId) {
-      handleError("Superior is required for employees", "superiorId");
-      isValid = false;
-    }
-
-    // Check if email is already taken (you might want to implement this check)
-    // This would typically be done on the backend, but frontend validation helps UX
-
-    return isValid;
-  };
-
-  // Handle input changes with validation
-  const handleInputChange = (field, value) => {
-    setForm(prev => ({ ...prev, [field]: value }));
-    
-    // Clear success message when form is modified
-    if (success) setSuccess(null);
-    
-    // Validate field on change (debounced validation would be better for UX)
-    setTimeout(() => validateField(field, value), 300);
-  };
-
-  // Handle form submission
+  // --- Submit form
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
-    if (!validateForm()) {
-      setError("Please fix the errors below before submitting");
+    setError(null);
+    setSuccess(null);
+
+    if (form.passwordMethod === "manual" && form.password !== form.confirmPassword) {
+      setError("Passwords do not match");
       return;
     }
 
     setLoading(true);
-    setError(null);
-    setSuccess(null);
-
     try {
-      // Clean form data
-      const cleanedForm = {
-        ...form,
-        name: form.name.trim(),
-        email: form.email.trim().toLowerCase(),
-        department: form.department.trim(),
-        position: form.position.trim(),
-        phone: form.phone.trim(),
-        superiorId: form.superiorId || null
-      };
-
-      const res = await API.post("/admin/create", cleanedForm);
-      
-      setSuccess(`Employee "${form.name}" created successfully! Employee ID: ${res.data.employeeId || 'Generated'}`);
-      
-      // Reset form
+      const response = await API.post("/api/admin/create", form);
+      setSuccess(`Employee created successfully. ID: ${response.data.employee._id}`);
+      if (onEmployeeCreated) onEmployeeCreated(response.data.employee);
       setForm({
         name: "",
         email: "",
@@ -186,89 +155,44 @@ const CreateEmployee = ({ onEmployeeCreated }) => {
         department: "",
         position: "",
         phone: "",
-        startDate: new Date().toISOString().split('T')[0]
+        startDate: new Date().toISOString().split("T")[0],
+        password: "",
+        confirmPassword: "",
+        passwordMethod: "generate",
       });
-      setFieldErrors({});
-      
-      // Callback for parent component
-      if (onEmployeeCreated) {
-        onEmployeeCreated(res.data);
-      }
-      
     } catch (err) {
-      console.error("Error creating employee:", err);
-      const errorMessage = err?.response?.data?.message || 
-                          err?.response?.data?.error || 
-                          "Error creating employee. Please try again.";
-      handleError(errorMessage);
+      setError(err.response?.data?.error || "Error creating employee. Please try again.");
     } finally {
       setLoading(false);
     }
   };
 
-  // Reset form
-  const resetForm = () => {
-    setForm({
-      name: "",
-      email: "",
-      role: "employee",
-      superiorId: "",
-      department: "",
-      position: "",
-      phone: "",
-      startDate: new Date().toISOString().split('T')[0]
-    });
-    setFieldErrors({});
-    setError(null);
-    setSuccess(null);
+  // --- Handle password generation
+  const handleGeneratePassword = () => {
+    const newPassword = generatePassword();
+    setForm((prev) => ({ ...prev, password: newPassword, confirmPassword: newPassword }));
+    setPasswordStrength(checkPasswordStrength(newPassword));
   };
 
-  // Load superiors on component mount
-  useEffect(() => {
-    fetchSuperiors();
-  }, [fetchSuperiors]);
-
   return (
-    <div className="max-w-2xl mx-auto p-6">
+    <div className="max-w-4xl mx-auto p-6">
       {/* Header */}
-      <div className="mb-8">
-        <h2 className="text-3xl font-bold text-gray-900 mb-2">Create New Employee</h2>
-        <p className="text-gray-600">Add a new employee to your organization</p>
+      <div className="mb-6">
+        <h2 className="text-2xl font-bold text-gray-800">Create New Employee</h2>
+        <p className="text-gray-600">Fill in the details below to add a new employee</p>
       </div>
 
-      {/* Success Message */}
+      {/* Success & Error messages */}
       {success && (
-        <div className="mb-6 p-4 bg-green-100 border border-green-400 text-green-700 rounded-lg">
-          <div className="flex justify-between items-start">
-            <div>
-              <h4 className="font-medium">Success!</h4>
-              <p className="text-sm mt-1">{success}</p>
-            </div>
-            <button 
-              onClick={() => setSuccess(null)}
-              className="text-green-500 hover:text-green-700 font-bold text-xl"
-            >
-              ×
-            </button>
-          </div>
+        <div className="mb-4 p-4 bg-green-50 border border-green-200 rounded-lg flex items-start">
+          <CheckCircle className="w-5 h-5 text-green-600 mr-2 mt-0.5" />
+          <p className="text-green-800">{success}</p>
         </div>
       )}
-
-      {/* Error Message */}
       {error && (
-        <div className="mb-6 p-4 bg-red-100 border border-red-400 text-red-700 rounded-lg">
-          <div className="flex justify-between items-start">
-            <div>
-              <h4 className="font-medium">Error</h4>
-              <p className="text-sm mt-1">{error}</p>
-            </div>
-            <button 
-              onClick={() => setError(null)}
-              className="text-red-500 hover:text-red-700 font-bold text-xl"
-            >
-              ×
-            </button>
-          </div>
+        <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg flex items-start">
+          <AlertCircle className="w-5 h-5 text-red-600 mr-2 mt-0.5" />
+          <p className="text-red-800">{error}</p>
         </div>
       )}
 
@@ -276,220 +200,240 @@ const CreateEmployee = ({ onEmployeeCreated }) => {
         {/* Basic Information */}
         <div className="bg-white p-6 rounded-lg border shadow-sm">
           <h3 className="text-lg font-semibold mb-4">Basic Information</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Name Field */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Full Name <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="text"
-                value={form.name}
-                onChange={(e) => handleInputChange('name', e.target.value)}
-                className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors ${
-                  fieldErrors.name ? 'border-red-500 bg-red-50' : 'border-gray-300'
-                }`}
-                placeholder="Enter employee's full name"
-                required
-              />
-              {fieldErrors.name && (
-                <p className="mt-1 text-sm text-red-600">{fieldErrors.name}</p>
-              )}
-            </div>
-
-            {/* Email Field */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Email Address <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="email"
-                value={form.email}
-                onChange={(e) => handleInputChange('email', e.target.value)}
-                className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors ${
-                  fieldErrors.email ? 'border-red-500 bg-red-50' : 'border-gray-300'
-                }`}
-                placeholder="employee@company.com"
-                required
-              />
-              {fieldErrors.email && (
-                <p className="mt-1 text-sm text-red-600">{fieldErrors.email}</p>
-              )}
-            </div>
-
-            {/* Role Field */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Role <span className="text-red-500">*</span>
-              </label>
-              <select
-                value={form.role}
-                onChange={(e) => handleInputChange('role', e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
-              >
-                <option value="employee">Employee</option>
-                <option value="superior">Superior/Manager</option>
-                <option value="admin">Administrator</option>
-              </select>
-            </div>
-
-            {/* Superior Selection */}
-            {form.role === "employee" && (
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Superior/Manager <span className="text-red-500">*</span>
-                </label>
-                <select
-                  value={form.superiorId}
-                  onChange={(e) => handleInputChange('superiorId', e.target.value)}
-                  className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors ${
-                    fieldErrors.superiorId ? 'border-red-500 bg-red-50' : 'border-gray-300'
-                  }`}
-                  disabled={loadingSuperiors}
-                >
-                  <option value="">Select a superior...</option>
-                  {superiors.map(superior => (
-                    <option key={superior._id} value={superior._id}>
-                      {superior.name} ({superior.email})
-                    </option>
-                  ))}
-                </select>
-                {loadingSuperiors && (
-                  <p className="mt-1 text-sm text-gray-500">Loading superiors...</p>
-                )}
-                {fieldErrors.superiorId && (
-                  <p className="mt-1 text-sm text-red-600">{fieldErrors.superiorId}</p>
-                )}
-              </div>
-            )}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <input type="text" name="name" placeholder="Full Name"
+              value={form.name} onChange={handleInputChange}
+              className="border p-2 rounded-lg" required />
+            <input type="email" name="email" placeholder="Email Address"
+              value={form.email} onChange={handleInputChange}
+              className="border p-2 rounded-lg" required />
+          </div>
+          <div className="mt-4">
+            <label className="block text-sm font-medium text-gray-700 mb-2">Role</label>
+            <select name="role" value={form.role} onChange={handleInputChange}
+              className="border p-2 rounded-lg w-full md:w-1/2">
+              <option value="employee">Employee</option>
+              <option value="superior">Superior</option>
+              <option value="admin">Admin</option>
+            </select>
           </div>
         </div>
 
-        {/* Advanced Information (Collapsible) */}
+        {/* Password & Security */}
         <div className="bg-white p-6 rounded-lg border shadow-sm">
-          <div 
-            className="flex justify-between items-center cursor-pointer"
-            onClick={() => setShowAdvanced(!showAdvanced)}
-          >
-            <h3 className="text-lg font-semibold">Additional Information</h3>
-            <span className="text-blue-600 hover:text-blue-800 transition-colors">
-              {showAdvanced ? '▼ Hide' : '▶ Show'}
-            </span>
+          <h3 className="text-lg font-semibold mb-4">Password & Security</h3>
+
+          {/* Method selection */}
+          <div className="mb-4">
+            <label className="flex items-center mb-2">
+              <input type="radio" name="passwordMethod" value="generate"
+                checked={form.passwordMethod === "generate"}
+                onChange={handleInputChange} className="mr-2" /> Generate Password
+            </label>
+            <label className="flex items-center">
+              <input type="radio" name="passwordMethod" value="manual"
+                checked={form.passwordMethod === "manual"}
+                onChange={handleInputChange} className="mr-2" /> Enter Manually
+            </label>
           </div>
-          
-          {showAdvanced && (
-            <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* Department */}
+
+          {/* --- Generated Password Section --- */}
+          {form.passwordMethod === "generate" && (
+            <div className="space-y-6">
+              {/* Length slider */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Department
+                  Password Length: {passwordOptions.length}
                 </label>
-                <input
-                  type="text"
-                  value={form.department}
-                  onChange={(e) => handleInputChange('department', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
-                  placeholder="e.g., Engineering, HR, Marketing"
-                />
+                <input type="range" min="8" max="32" value={passwordOptions.length}
+                  onChange={(e) =>
+                    setPasswordOptions((prev) => ({
+                      ...prev, length: parseInt(e.target.value),
+                    }))
+                  }
+                  className="w-full" />
               </div>
 
-              {/* Position */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Position/Title
-                </label>
-                <input
-                  type="text"
-                  value={form.position}
-                  onChange={(e) => handleInputChange('position', e.target.value)}
-                  className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors ${
-                    fieldErrors.position ? 'border-red-500 bg-red-50' : 'border-gray-300'
-                  }`}
-                  placeholder="e.g., Software Developer, HR Manager"
-                />
-                {fieldErrors.position && (
-                  <p className="mt-1 text-sm text-red-600">{fieldErrors.position}</p>
-                )}
+              {/* Options checkboxes */}
+              <div className="space-y-2">
+                {[
+                  { key: "includeUppercase", label: "Include uppercase (A-Z)" },
+                  { key: "includeLowercase", label: "Include lowercase (a-z)" },
+                  { key: "includeNumbers", label: "Include numbers (0-9)" },
+                  { key: "includeSymbols", label: "Include symbols (!@#$...)" },
+                  { key: "excludeSimilar", label: "Exclude similar characters (i,l,1,o,0,O)" },
+                ].map((opt) => (
+                  <label key={opt.key} className="flex items-center text-sm">
+                    <input type="checkbox" checked={passwordOptions[opt.key]}
+                      onChange={(e) =>
+                        setPasswordOptions((prev) => ({
+                          ...prev, [opt.key]: e.target.checked,
+                        }))
+                      }
+                      className="mr-2" /> {opt.label}
+                  </label>
+                ))}
               </div>
 
-              {/* Phone */}
+              {/* Generate button */}
+              <button type="button" onClick={handleGeneratePassword}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center">
+                <RefreshCw className="w-4 h-4 mr-2" /> Generate Password
+              </button>
+
+              {/* Show generated password */}
+              {form.password && (
+                <div className="p-4 bg-gray-50 rounded-lg">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Generated Password
+                  </label>
+                  <div className="flex items-center space-x-2">
+                    <div className="relative flex-1">
+                      <input type={showPassword ? "text" : "password"}
+                        value={form.password} readOnly
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white font-mono text-sm" />
+                      <button type="button" onClick={() => setShowPassword(!showPassword)}
+                        className="absolute right-2 top-2 text-gray-500 hover:text-gray-700">
+                        {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
+                    <button type="button" onClick={() => copyToClipboard(form.password, "Password")}
+                      className="px-3 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors flex items-center">
+                      <Copy className="w-4 h-4" />
+                    </button>
+                  </div>
+                  <div className="mt-2 text-sm font-medium text-green-600">
+                    Password Strength: Strong ✓
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* --- Manual Password Entry --- */}
+          {form.passwordMethod === "manual" && (
+            <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Phone Number
+                  Password
                 </label>
-                <input
-                  type="tel"
-                  value={form.phone}
-                  onChange={(e) => handleInputChange('phone', e.target.value)}
-                  className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors ${
-                    fieldErrors.phone ? 'border-red-500 bg-red-50' : 'border-gray-300'
-                  }`}
-                  placeholder="+1 (555) 123-4567"
-                />
-                {fieldErrors.phone && (
-                  <p className="mt-1 text-sm text-red-600">{fieldErrors.phone}</p>
-                )}
+                <div className="relative">
+                  <input type={showPassword ? "text" : "password"}
+                    name="password" value={form.password}
+                    onChange={handleInputChange}
+                    className="w-full px-3 py-2 border rounded-lg" required />
+                  <button type="button" onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-2 top-2 text-gray-500 hover:text-gray-700">
+                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+                {/* Strength meter */}
+                <div className="mt-2">
+                  <div className="h-2 bg-gray-200 rounded-full">
+                    <div
+                      className={`h-2 rounded-full ${passwordStrength.score <= 2 ? "bg-red-500" :
+                        passwordStrength.score === 3 ? "bg-yellow-500" :
+                          "bg-green-500"
+                        }`}
+                      style={{ width: `${(passwordStrength.score / 5) * 100}%` }}
+                    ></div>
+                  </div>
+                  <p className="text-sm mt-1">
+                    {passwordStrength.score <= 2
+                      ? "Weak password"
+                      : passwordStrength.score === 3
+                        ? "Moderate password"
+                        : "Strong password"}
+                  </p>
+                  {passwordStrength.feedback.length > 0 && (
+                    <ul className="mt-1 text-xs text-gray-500 list-disc pl-4">
+                      {passwordStrength.feedback.map((item, idx) => (
+                        <li key={idx}>{item}</li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
               </div>
 
-              {/* Start Date */}
+              {/* Confirm Password */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Start Date
+                  Confirm Password
                 </label>
-                <input
-                  type="date"
-                  value={form.startDate}
-                  onChange={(e) => handleInputChange('startDate', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
-                />
+                <div className="relative">
+                  <input type={showConfirmPassword ? "text" : "password"}
+                    name="confirmPassword" value={form.confirmPassword}
+                    onChange={handleInputChange}
+                    className="w-full px-3 py-2 border rounded-lg" required />
+                  <button type="button" onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                    className="absolute right-2 top-2 text-gray-500 hover:text-gray-700">
+                    {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
               </div>
             </div>
           )}
         </div>
 
-        {/* Form Actions */}
-        <div className="flex flex-col sm:flex-row gap-4 justify-end">
-          <button
-            type="button"
-            onClick={resetForm}
-            className="px-6 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
-            disabled={loading}
-          >
-            Reset Form
+        {/* Advanced Information */}
+        <div className="bg-white p-6 rounded-lg border shadow-sm">
+          <h3 className="text-lg font-semibold mb-4">Advanced Information</h3>
+          <button type="button" onClick={() => setShowAdvanced(!showAdvanced)}
+            className="text-blue-600 hover:text-blue-800 text-sm mb-4">
+            {showAdvanced ? "Hide" : "Show"} Advanced Fields
           </button>
-          
-          <button
-            type="submit"
-            disabled={loading || Object.keys(fieldErrors).length > 0}
-            className={`px-8 py-3 rounded-lg font-medium transition-colors flex items-center justify-center ${
-              loading || Object.keys(fieldErrors).length > 0
-                ? 'bg-gray-400 text-white cursor-not-allowed'
-                : 'bg-green-600 text-white hover:bg-green-700'
-            }`}
-          >
-            {loading ? (
-              <>
-                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                Creating Employee...
-              </>
-            ) : (
-              <>
-                ✨ Create Employee
-              </>
-            )}
+          {showAdvanced && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <input type="text" name="department" placeholder="Department"
+                value={form.department} onChange={handleInputChange}
+                className="border p-2 rounded-lg" />
+              <input type="text" name="position" placeholder="Position"
+                value={form.position} onChange={handleInputChange}
+                className="border p-2 rounded-lg" />
+              <input type="text" name="phone" placeholder="Phone Number"
+                value={form.phone} onChange={handleInputChange}
+                className="border p-2 rounded-lg" />
+              <input type="date" name="startDate"
+                value={form.startDate} onChange={handleInputChange}
+                className="border p-2 rounded-lg" />
+              <select name="superiorId" value={form.superiorId}
+                onChange={handleInputChange}
+                className="border p-2 rounded-lg">
+                <option value="">Select Superior</option>
+                {superiors.map((sup) => (
+                  <option key={sup._id} value={sup._id}>{sup.name}</option>
+                ))}
+              </select>
+            </div>
+          )}
+        </div>
+
+        {/* Actions */}
+        <div className="flex justify-end space-x-3">
+          <button type="reset"
+            onClick={() => setForm({
+              name: "", email: "", role: "employee", superiorId: "",
+              department: "", position: "", phone: "",
+              startDate: new Date().toISOString().split("T")[0],
+              password: "", confirmPassword: "", passwordMethod: "generate"
+            })}
+            className="px-4 py-2 border rounded-lg hover:bg-gray-50">
+            Cancel
+          </button>
+          <button type="submit" disabled={loading}
+            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50">
+            {loading ? "Creating..." : "Create Employee"}
           </button>
         </div>
       </form>
 
-      {/* Form Tips */}
-      <div className="mt-8 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-        <h4 className="font-medium text-blue-800 mb-2">💡 Tips:</h4>
-        <ul className="text-sm text-blue-700 space-y-1">
-          <li>• Fields marked with <span className="text-red-500">*</span> are required</li>
-          <li>• Email addresses must be unique and valid</li>
-          <li>• Employees must be assigned to a superior/manager</li>
-          <li>• Additional information can be updated later in the employee profile</li>
-        </ul>
+      {/* Tips */}
+      <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg flex items-start">
+        <Info className="w-5 h-5 text-blue-600 mr-2 mt-0.5" />
+        <p className="text-sm text-blue-800">
+          Tip: Use the password generator for stronger security. Generated
+          passwords can be copied and securely shared with the employee.
+        </p>
       </div>
     </div>
   );

@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import API from "../api";
+import { toast } from "react-toastify";
 
 const Attendance = ({ employeeId }) => {
   // State management
@@ -24,15 +25,24 @@ const Attendance = ({ employeeId }) => {
 
   // Show success notification
   const showNotification = (message, type = "success") => {
-    console.log(`${type.toUpperCase()}: ${message}`);
-    // Consider integrating with a toast library like react-hot-toast
+    if (type === "success") {
+      toast.success(message);
+    } else if (type === "error") {
+      toast.error(message);
+    } else if (type === "warning") {
+      toast.warning(message);
+    } else if (type === "info") {
+      toast.info(message);
+    } else {
+      toast(message);
+    }
   };
 
   // Fetch attendance records with filtering
   const fetchAttendance = useCallback(async () => {
     try {
       setLoading(true);
-      const res = await API.get(`/attendance/${employeeId}`);
+      const res = await API.get(`/api/attendance/${employeeId}`);
       let fetchedRecords = res.data || [];
       
       // Apply filtering
@@ -98,8 +108,55 @@ const Attendance = ({ employeeId }) => {
     });
   };
 
-  // Enhanced check-in with validation
+  // Get user's current location
+  const getCurrentLocation = () => {
+    return new Promise((resolve, reject) => {
+      if (!navigator.geolocation) {
+        reject(new Error("Geolocation is not supported by this browser"));
+        return;
+      }
+
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          resolve({
+            latitude: position.coords.latitude,
+            longitude: position.coords.longitude
+          });
+        },
+        (error) => {
+          let errorMessage = "Unable to get your location";
+          switch (error.code) {
+            case error.PERMISSION_DENIED:
+              errorMessage = "Location access denied. Please enable location permissions to check in.";
+              break;
+            case error.POSITION_UNAVAILABLE:
+              errorMessage = "Location information is unavailable.";
+              break;
+            case error.TIMEOUT:
+              errorMessage = "Location request timed out.";
+              break;
+            default:
+              errorMessage = "An unknown location error occurred.";
+              break;
+          }
+          reject(new Error(errorMessage));
+        },
+        {
+          enableHighAccuracy: true,
+          timeout: 10000,
+          maximumAge: 300000 // 5 minutes
+        }
+      );
+    });
+  };
+
+  // Enhanced check-in with location validation
   const handleCheckIn = async () => {
+    if (!employeeId) {
+      setError("Employee ID is missing. Please log in again.");
+      return;
+    }
+
     if (currentStatus?.isCheckedIn) {
       setError("You are already checked in today!");
       return;
@@ -107,12 +164,29 @@ const Attendance = ({ employeeId }) => {
 
     setActionLoading(prev => ({ ...prev, checkIn: true }));
     try {
-      await API.post("/attendance/checkin", { employeeId });
+      console.log("Attempting check-in with employeeId:", employeeId);
+
+      // Get user's current location
+      showNotification("Getting your location...", "info");
+      const location = await getCurrentLocation();
+      console.log("User location:", location);
+
+      // Send check-in request with location data
+      const response = await API.post(`/api/attendance/checkin/${employeeId}`, {
+        latitude: location.latitude,
+        longitude: location.longitude
+      });
+
       await fetchAttendance();
-      showNotification("Successfully checked in!");
+      showNotification(`Successfully checked in! Distance from office: ${response.data.distance}m`);
       setError(null);
     } catch (err) {
-      handleError(err, "checking in");
+      console.error("Check-in error:", err);
+      if (err.message.includes("Location")) {
+        setError(err.message);
+      } else {
+        handleError(err, "checking in");
+      }
     } finally {
       setActionLoading(prev => ({ ...prev, checkIn: false }));
     }
@@ -120,6 +194,11 @@ const Attendance = ({ employeeId }) => {
 
   // Enhanced check-out with validation
   const handleCheckOut = async () => {
+    if (!employeeId) {
+      setError("Employee ID is missing. Please log in again.");
+      return;
+    }
+
     if (!currentStatus?.isCheckedIn) {
       setError("You must check in first before checking out!");
       return;
@@ -127,11 +206,29 @@ const Attendance = ({ employeeId }) => {
 
     setActionLoading(prev => ({ ...prev, checkOut: true }));
     try {
-      await API.post("/attendance/checkout", { employeeId });
+      console.log("Attempting check-out with employeeId:", employeeId);
+
+      // Try to get user's current location for check-out (optional)
+      let locationData = {};
+      try {
+        const location = await getCurrentLocation();
+        locationData = {
+          latitude: location.latitude,
+          longitude: location.longitude
+        };
+        console.log("Check-out location:", location);
+      } catch (locationErr) {
+        console.log("Could not get location for check-out:", locationErr.message);
+        // Continue without location data
+      }
+
+      // Send check-out request with optional location data
+      await API.post(`/api/attendance/checkout/${employeeId}`, locationData);
       await fetchAttendance();
       showNotification("Successfully checked out!");
       setError(null);
     } catch (err) {
+      console.error("Check-out error:", err);
       handleError(err, "checking out");
     } finally {
       setActionLoading(prev => ({ ...prev, checkOut: false }));

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import API from "../api";
 import Card from "../components/Card";
 import { toast } from "react-toastify";
+import { useNavigate } from "react-router-dom";
 
 const SuperiorDashboard = ({ superiorId }) => {
   const [subordinates, setSubordinates] = useState([]);
@@ -11,13 +12,22 @@ const SuperiorDashboard = ({ superiorId }) => {
     activeSubordinates: 0,
     onLeaveToday: 0
   });
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [recentRequests, setRecentRequests] = useState([]);
+  const [showLeaveModal, setShowLeaveModal] = useState(false);
+  const [showJustificationModal, setShowJustificationModal] = useState(false);
+  const [leaveForm, setLeaveForm] = useState({ startDate: '', endDate: '', reason: '' });
+  const [justificationForm, setJustificationForm] = useState({ reason: '' });
+  const [submitting, setSubmitting] = useState(false);
+
   const [quickActions] = useState([
-    { id: 1, title: "Approve Leaves", icon: "✅", path: "/superior/leaves", color: "green" },
-    { id: 2, title: "Review Justifications", icon: "📝", path: "/superior/justifications", color: "yellow" },
+    { id: 1, title: "Approve Leaves", icon: "✅", path: "/superior/leaves-approval", color: "green" },
+    { id: 2, title: "Review Justifications", icon: "📝", path: "/superior/justifications-approval", color: "yellow" },
     { id: 3, title: "Team Overview", icon: "👥", path: "/superior/team", color: "blue" },
-    { id: 4, title: "Team Reports", icon: "📊", path: "/superior/reports", color: "purple" }
+    { id: 4, title: "All Requests", icon: "📋", path: "/all-requests", color: "purple" },
+    { id: 5, title: "Demand Leave", icon: "📅", path: "#demand-leave", color: "orange", action: "openLeaveModal" },
+    { id: 6, title: "Submit Justification", icon: "📋", path: "#submit-justification", color: "red", action: "openJustificationModal" }
   ]);
 
   const fetchStats = async () => {
@@ -25,32 +35,30 @@ const SuperiorDashboard = ({ superiorId }) => {
       setLoading(true);
       
       // Fetch all necessary data in parallel
-      const [employeesRes, leavesRes, justificationsRes, attendanceRes] = await Promise.all([
-        API.get("/admin/employees"),
-        API.get("/leave"),
-        API.get("/justification"),
-        API.get("/attendance/today")
+      const [subordinatesRes, leavesRes, justificationsRes, attendanceRes] = await Promise.all([
+        API.get(`/api/superior/subordinates/${superiorId}`),
+        API.get(`/api/superior/leaves/${superiorId}`),
+        API.get(`/api/superior/justifications/${superiorId}`),
+        API.get("/api/attendance/today/all")
       ]);
 
-      const allEmployees = employeesRes.data;
-      const allLeaves = leavesRes.data;
-      const allJustifications = justificationsRes.data;
+      const subs = subordinatesRes.data;
+      const subordinateLeaves = leavesRes.data;
+      const subordinateJustifications = justificationsRes.data;
       const todayAttendance = attendanceRes.data;
 
-      // Filter subordinates
-      const subs = allEmployees.filter(e => e.superiorId === superiorId);
       setSubordinates(subs);
 
       // Get subordinate IDs for filtering
       const subordinateIds = subs.map(s => s._id);
 
       // Calculate pending requests from subordinates
-      const pendingLeavesCount = allLeaves.filter(
-        l => l.status === "Pending" && subordinateIds.includes(l.employeeId)
+      const pendingLeavesCount = subordinateLeaves.filter(
+        l => l.status === "Pending"
       ).length;
 
-      const pendingJustificationsCount = allJustifications.filter(
-        j => j.status === "Pending" && subordinateIds.includes(j.employeeId)
+      const pendingJustificationsCount = subordinateJustifications.filter(
+        j => j.status === "Pending"
       ).length;
 
       // Calculate active subordinates today
@@ -60,10 +68,10 @@ const SuperiorDashboard = ({ superiorId }) => {
 
       // Calculate subordinates on leave today
       const today = new Date().toISOString().split('T')[0];
-      const onLeaveToday = allLeaves.filter(l => 
+      const onLeaveToday = subordinateLeaves.filter(l =>
         subordinateIds.includes(l.employeeId) &&
-        l.status === "Approved" && 
-        today >= l.startDate && 
+        l.status === "Approved" &&
+        today >= l.startDate &&
         today <= l.endDate
       ).length;
 
@@ -76,23 +84,23 @@ const SuperiorDashboard = ({ superiorId }) => {
 
       // Get recent requests from subordinates (last 5)
       const recentSubordinateRequests = [
-        ...allLeaves
+        ...subordinateLeaves
           .filter(l => subordinateIds.includes(l.employeeId))
           .map(l => ({
             type: "leave",
             id: l._id,
-            employee: allEmployees.find(e => e._id === l.employeeId)?.name || `Employee ${l.employeeId}`,
+            employee: subs.find(e => e._id === l.employeeId)?.name || `Employee ${l.employeeId}`,
             status: l.status,
             date: l.createdAt || l.startDate,
             action: "leave request",
             details: `${l.leaveType || 'Leave'} from ${new Date(l.startDate).toLocaleDateString()} to ${new Date(l.endDate).toLocaleDateString()}`
           })),
-        ...allJustifications
+        ...subordinateJustifications
           .filter(j => subordinateIds.includes(j.employeeId))
           .map(j => ({
             type: "justification",
             id: j._id,
-            employee: allEmployees.find(e => e._id === j.employeeId)?.name || `Employee ${j.employeeId}`,
+            employee: subs.find(e => e._id === j.employeeId)?.name || `Employee ${j.employeeId}`,
             status: j.status,
             date: j.createdAt || new Date().toISOString(),
             action: "justification submission",
@@ -112,8 +120,53 @@ const SuperiorDashboard = ({ superiorId }) => {
   };
 
   const handleQuickAction = (action) => {
-    toast.info(`Navigating to ${action.path}`);
-    console.log("Navigating to:", action.path);
+    if (action.action === "openLeaveModal") {
+      setShowLeaveModal(true);
+    } else if (action.action === "openJustificationModal") {
+      setShowJustificationModal(true);
+    } else {
+      navigate(action.path);
+    }
+  };
+
+  const handleDemandLeave = async () => {
+    if (!leaveForm.startDate || !leaveForm.endDate || !leaveForm.reason) {
+      toast.error("Please fill in all fields");
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      const response = await API.post(`/api/superior/demand-leave/${superiorId}`, leaveForm);
+      toast.success(response.data.message);
+      setShowLeaveModal(false);
+      setLeaveForm({ startDate: '', endDate: '', reason: '' });
+      fetchStats(); // Refresh data
+    } catch (err) {
+      toast.error(err.response?.data?.error || "Failed to submit leave demand");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleSubmitJustification = async () => {
+    if (!justificationForm.reason) {
+      toast.error("Please provide a reason");
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      const response = await API.post(`/api/superior/submit-justification/${superiorId}`, justificationForm);
+      toast.success(response.data.message);
+      setShowJustificationModal(false);
+      setJustificationForm({ reason: '' });
+      fetchStats(); // Refresh data
+    } catch (err) {
+      toast.error(err.response?.data?.error || "Failed to submit justification");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const getStatusColor = (status) => {
@@ -346,6 +399,100 @@ const SuperiorDashboard = ({ superiorId }) => {
                   Review Justifications
                 </button>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Leave Demand Modal */}
+      {showLeaveModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-full max-w-md">
+            <h2 className="text-xl font-bold mb-4">Demand Leave</h2>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium mb-1">Start Date</label>
+                <input
+                  type="date"
+                  value={leaveForm.startDate}
+                  onChange={(e) => setLeaveForm({...leaveForm, startDate: e.target.value})}
+                  className="w-full p-2 border rounded"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">End Date</label>
+                <input
+                  type="date"
+                  value={leaveForm.endDate}
+                  onChange={(e) => setLeaveForm({...leaveForm, endDate: e.target.value})}
+                  className="w-full p-2 border rounded"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">Reason</label>
+                <textarea
+                  value={leaveForm.reason}
+                  onChange={(e) => setLeaveForm({...leaveForm, reason: e.target.value})}
+                  className="w-full p-2 border rounded"
+                  rows="3"
+                  required
+                />
+              </div>
+            </div>
+            <div className="flex justify-end space-x-3 mt-6">
+              <button
+                onClick={() => setShowLeaveModal(false)}
+                className="px-4 py-2 border rounded"
+                disabled={submitting}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDemandLeave}
+                className="px-4 py-2 bg-blue-600 text-white rounded"
+                disabled={submitting}
+              >
+                {submitting ? "Submitting..." : "Submit Demand"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Justification Modal */}
+      {showJustificationModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-full max-w-md">
+            <h2 className="text-xl font-bold mb-4">Submit Justification to Admin</h2>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium mb-1">Reason</label>
+                <textarea
+                  value={justificationForm.reason}
+                  onChange={(e) => setJustificationForm({...justificationForm, reason: e.target.value})}
+                  className="w-full p-2 border rounded"
+                  rows="4"
+                  required
+                />
+              </div>
+            </div>
+            <div className="flex justify-end space-x-3 mt-6">
+              <button
+                onClick={() => setShowJustificationModal(false)}
+                className="px-4 py-2 border rounded"
+                disabled={submitting}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSubmitJustification}
+                className="px-4 py-2 bg-blue-600 text-white rounded"
+                disabled={submitting}
+              >
+                {submitting ? "Submitting..." : "Submit Justification"}
+              </button>
             </div>
           </div>
         </div>

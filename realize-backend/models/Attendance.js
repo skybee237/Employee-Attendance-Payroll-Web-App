@@ -5,6 +5,10 @@ const attendanceSchema = new mongoose.Schema({
   date: { type: Date, required: true },
   checkIn: { type: Date, required: true },
   checkOut: { type: Date },
+  checkInLat: { type: Number },
+  checkInLng: { type: Number },
+  checkOutLat: { type: Number },
+  checkOutLng: { type: Number },
   expectedEnd: { type: Date }, // scheduled end time
   overtimeStart: { type: Date },
   overtimeEnd: { type: Date },

@@ -35,15 +35,17 @@ const Leave = ({ employeeId, canRequestLeave = true }) => {
     try {
       setIsLoading(true);
       setError(null);
-      const [leavesRes, statsRes] = await Promise.all([
-        API.get(`/leave/${employeeId}`),
-        API.get(`/leave/stats/${employeeId}`)
-      ]);
-      
+      const leavesRes = await API.get(`/api/leave/${employeeId}`);
+
       setLeaves(leavesRes.data);
-      setStats(statsRes.data);
+      // For now, set default stats since stats endpoint doesn't exist
+      setStats({
+        used: leavesRes.data.filter(leave => leave.status === 'Approved').length,
+        remaining: 25, // Default annual leave allowance
+        total: 25
+      });
     } catch (err) {
-      setError("Failed to fetch leave data. Please try again.");
+      setError("Network Error. Please try again.");
       toast.error("Failed to fetch leave data");
     } finally {
       setIsLoading(false);
@@ -115,8 +117,7 @@ const Leave = ({ employeeId, canRequestLeave = true }) => {
       // Calculate duration
       const duration = calculateBusinessDays(form.startDate, form.endDate);
       
-      await API.post("/leave", { 
-        employeeId, 
+      await API.post(`/api/leave/${employeeId}`, {
         ...form,
         duration
       });
@@ -139,7 +140,7 @@ const Leave = ({ employeeId, canRequestLeave = true }) => {
     }
 
     try {
-      await API.delete(`/leave/${leaveId}`);
+      await API.delete(`/api/leave/${leaveId}`);
       toast.success("Leave request cancelled successfully");
       await fetchLeaves();
     } catch (err) {

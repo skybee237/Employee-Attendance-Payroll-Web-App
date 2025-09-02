@@ -6,7 +6,8 @@ const employeeSchema = new mongoose.Schema({
   email: { type: String, unique: true },
   password: { type: String, required: true },
   role: { type: String, enum: ["employee","superior","admin"], default: "employee" },
-  superiorId: { type: mongoose.Schema.Types.ObjectId, ref: "Employee", default: null }
+  superiorId: { type: mongoose.Schema.Types.ObjectId, ref: "Employee", default: null },
+  profilePicture: { type: String, default: null } // Path to profile picture file
 });
 
 // Hash password before saving

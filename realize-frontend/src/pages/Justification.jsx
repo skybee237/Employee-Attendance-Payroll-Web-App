@@ -131,7 +131,7 @@ const Justification = ({ employeeId }) => {
       formData.append('purpose', 'justification');
 
       try {
-        const response = await API.post('/upload', formData, {
+        const response = await API.post('/api/upload', formData, {
           headers: {
             'Content-Type': 'multipart/form-data'
           }
@@ -233,7 +233,7 @@ const Justification = ({ employeeId }) => {
   const fetchJustifications = useCallback(async () => {
     try {
       setLoading(true);
-      const res = await API.get(`/justification/${employeeId}`);
+      const res = await API.get(`/api/justification/${employeeId}`);
       let fetchedRecords = res.data || [];
       
       const filteredRecords = filter === 'all' 
@@ -290,11 +290,11 @@ const Justification = ({ employeeId }) => {
       };
 
       if (editingId) {
-        await API.put(`/justification/${editingId}`, submissionData);
+        await API.put(`/api/justification/${editingId}`, submissionData);
         showSuccess("Justification updated successfully!");
         setEditingId(null);
       } else {
-        await API.post("/justification", submissionData);
+        await API.post(`/api/justification/${employeeId}`, submissionData);
         showSuccess("Justification submitted successfully!");
       }
       
@@ -354,7 +354,7 @@ const Justification = ({ employeeId }) => {
     }
 
     try {
-      await API.delete(`/justification/${id}`);
+      await API.delete(`/api/justification/${id}`);
       showSuccess("Justification deleted successfully!");
       await fetchJustifications();
     } catch (err) {
