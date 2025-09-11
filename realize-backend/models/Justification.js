@@ -11,7 +11,8 @@ const justificationSchema = new mongoose.Schema({
     default: "employee" 
   },
   status: { type: String, enum: ["Pending","Approved","Rejected"], default: "Pending" },
-  adminNotes: { type: String, default: "" }
+  adminNotes: { type: String, default: "" },
+  processedAt: Date
 }, {
   timestamps: true
 });

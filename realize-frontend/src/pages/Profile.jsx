@@ -1,8 +1,9 @@
+
 import { useState, useEffect } from "react";
 import API from "../api";
 import { toast } from "react-toastify";
 
-const Profile = ({ employeeId }) => {
+const Profile = ({ employeeId, updateUserProfile }) => {
   const [profile, setProfile] = useState({
     name: "",
     email: "",
@@ -18,6 +19,30 @@ const Profile = ({ employeeId }) => {
   const [editing, setEditing] = useState(false);
   const [formData, setFormData] = useState({});
   const [uploadingPicture, setUploadingPicture] = useState(false);
+  const [showChangePasswordModal, setShowChangePasswordModal] = useState(false);
+  const [passwordData, setPasswordData] = useState({
+    currentPassword: "",
+    newPassword: "",
+    confirmPassword: ""
+  });
+  const [changingPassword, setChangingPassword] = useState(false);
+  const [show2FAModal, setShow2FAModal] = useState(false);
+  const [showNotificationsModal, setShowNotificationsModal] = useState(false);
+  const [twoFactorData, setTwoFactorData] = useState({
+    qrCode: null,
+    secret: null,
+    verificationCode: ""
+  });
+  const [notificationPreferences, setNotificationPreferences] = useState({
+    email: true,
+    inApp: true,
+    leaveRequests: true,
+    payrollUpdates: true
+  });
+  const [twoFactorEnabled, setTwoFactorEnabled] = useState(false);
+  const [settingUp2FA, setSettingUp2FA] = useState(false);
+  const [verifying2FA, setVerifying2FA] = useState(false);
+  const [updatingNotifications, setUpdatingNotifications] = useState(false);
 
   const fetchProfile = async () => {
     try {
@@ -46,6 +71,17 @@ const Profile = ({ employeeId }) => {
         address: profileData.address || ""
       });
 
+      // Set 2FA status from profile
+      setTwoFactorEnabled(profileData.twoFactorEnabled || false);
+
+      // Fetch notification preferences
+      try {
+        const notificationsResponse = await API.get("/api/auth/notifications");
+        setNotificationPreferences(notificationsResponse.data);
+      } catch (err) {
+        console.error("Failed to fetch notification preferences:", err);
+      }
+
     } catch (err) {
       console.error("Failed to fetch profile:", err);
       toast.error("Failed to load profile data");
@@ -68,6 +104,14 @@ const Profile = ({ employeeId }) => {
       toast.success("Profile updated successfully");
       setEditing(false);
       fetchProfile(); // Refresh profile data
+
+      // Update localStorage and parent state if name changed
+      if (formData.name && formData.name !== profile.name) {
+        localStorage.setItem("userName", formData.name);
+        if (updateUserProfile) {
+          updateUserProfile(formData.name, null);
+        }
+      }
     } catch (err) {
       console.error("Failed to update profile:", err);
       toast.error("Failed to update profile");
@@ -84,6 +128,133 @@ const Profile = ({ employeeId }) => {
       address: profile.address
     });
     setEditing(false);
+  };
+
+  const handlePasswordInputChange = (e) => {
+    const { name, value } = e.target;
+    setPasswordData(prev => ({
+      ...prev,
+      [name]: value
+    }));
+  };
+
+  const handleChangePassword = async () => {
+    if (passwordData.newPassword !== passwordData.confirmPassword) {
+      toast.error("New password and confirmation do not match");
+      return;
+    }
+
+    if (passwordData.newPassword.length < 6) {
+      toast.error("New password must be at least 6 characters long");
+      return;
+    }
+
+    try {
+      setChangingPassword(true);
+      await API.post("/api/password/change", {
+        currentPassword: passwordData.currentPassword,
+        newPassword: passwordData.newPassword,
+        confirmPassword: passwordData.confirmPassword
+      });
+      toast.success("Password changed successfully");
+      setShowChangePasswordModal(false);
+      setPasswordData({
+        currentPassword: "",
+        newPassword: "",
+        confirmPassword: ""
+      });
+    } catch (err) {
+      console.error("Failed to change password:", err);
+      const errorMessage = err.response?.data?.error || "Failed to change password";
+      toast.error(errorMessage);
+    } finally {
+      setChangingPassword(false);
+    }
+  };
+
+  const handleSetup2FA = async () => {
+    try {
+      setSettingUp2FA(true);
+      const response = await API.post("/api/auth/2fa/setup");
+      setTwoFactorData({
+        qrCode: response.data.qrCode,
+        secret: response.data.secret,
+        verificationCode: ""
+      });
+      setShow2FAModal(true);
+    } catch (err) {
+      console.error("Failed to setup 2FA:", err);
+      toast.error(err.response?.data?.error || "Failed to setup 2FA");
+    } finally {
+      setSettingUp2FA(false);
+    }
+  };
+
+  const handleVerify2FA = async () => {
+    if (!twoFactorData.verificationCode) {
+      toast.error("Please enter the verification code");
+      return;
+    }
+
+    try {
+      setVerifying2FA(true);
+      await API.post("/api/auth/2fa/verify", {
+        token: twoFactorData.verificationCode
+      });
+      toast.success("2FA enabled successfully");
+      setShow2FAModal(false);
+      setTwoFactorEnabled(true);
+      setTwoFactorData({
+        qrCode: null,
+        secret: null,
+        verificationCode: ""
+      });
+    } catch (err) {
+      console.error("Failed to verify 2FA:", err);
+      toast.error(err.response?.data?.error || "Failed to verify 2FA");
+    } finally {
+      setVerifying2FA(false);
+    }
+  };
+
+  const handleNotificationInputChange = (e) => {
+    const { name, checked } = e.target;
+    setNotificationPreferences(prev => ({
+      ...prev,
+      [name]: checked
+    }));
+  };
+
+  const handleUpdateNotifications = async () => {
+    try {
+      setUpdatingNotifications(true);
+      await API.put("/api/auth/notifications", notificationPreferences);
+      toast.success("Notification preferences updated successfully");
+      setShowNotificationsModal(false);
+    } catch (err) {
+      console.error("Failed to update notifications:", err);
+      toast.error(err.response?.data?.error || "Failed to update notifications");
+    } finally {
+      setUpdatingNotifications(false);
+    }
+  };
+
+  const handleDisable2FA = async () => {
+    const password = prompt("Enter your password to disable 2FA:");
+    if (!password) return;
+
+    try {
+      setVerifying2FA(true);
+      await API.post("/api/auth/2fa/disable", { password });
+      toast.success("2FA disabled successfully");
+      setShow2FAModal(false);
+      setTwoFactorEnabled(false);
+    } catch (err) {
+      console.error("Failed to disable 2FA:", err);
+      toast.error(err.response?.data?.error || "Failed to disable 2FA");
+    } finally {
+      setVerifying2FA(false);
+    }
   };
 
   const handlePictureUpload = async (event) => {
@@ -115,6 +286,14 @@ const Profile = ({ employeeId }) => {
 
       toast.success("Profile picture uploaded successfully");
       fetchProfile(); // Refresh profile data to show new picture
+
+      // Update localStorage and parent state with new picture
+      if (response.data.profilePicture) {
+        localStorage.setItem("profilePicture", response.data.profilePicture);
+        if (updateUserProfile) {
+          updateUserProfile(null, response.data.profilePicture);
+        }
+      }
     } catch (err) {
       console.error("Failed to upload profile picture:", err);
       toast.error("Failed to upload profile picture");
@@ -345,7 +524,10 @@ const Profile = ({ employeeId }) => {
               <h4 className="font-medium text-gray-900">Change Password</h4>
               <p className="text-sm text-gray-600">Update your account password</p>
             </div>
-            <button className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors">
+            <button
+              className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+              onClick={() => setShowChangePasswordModal(true)}
+            >
               Change Password
             </button>
           </div>
@@ -353,10 +535,15 @@ const Profile = ({ employeeId }) => {
           <div className="flex items-center justify-between py-3 border-b border-gray-100">
             <div>
               <h4 className="font-medium text-gray-900">Two-Factor Authentication</h4>
-              <p className="text-sm text-gray-600">Add an extra layer of security to your account</p>
+              <p className="text-sm text-gray-600">
+                {twoFactorEnabled ? "Two-factor authentication is enabled" : "Add an extra layer of security to your account"}
+              </p>
             </div>
-            <button className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors">
-              Enable 2FA
+            <button
+              className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+              onClick={() => setShow2FAModal(true)}
+            >
+              {twoFactorEnabled ? "Manage 2FA" : "Enable 2FA"}
             </button>
           </div>
 
@@ -365,12 +552,247 @@ const Profile = ({ employeeId }) => {
               <h4 className="font-medium text-gray-900">Notification Preferences</h4>
               <p className="text-sm text-gray-600">Manage how you receive notifications</p>
             </div>
-            <button className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors">
+            <button
+              className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+              onClick={() => setShowNotificationsModal(true)}
+            >
               Manage
             </button>
           </div>
         </div>
       </div>
+
+      {/* Change Password Modal */}
+      {showChangePasswordModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
+            <h3 className="text-lg font-semibold text-gray-800 mb-4">Change Password</h3>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Current Password</label>
+                <input
+                  type="password"
+                  name="currentPassword"
+                  value={passwordData.currentPassword}
+                  onChange={handlePasswordInputChange}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder="Enter current password"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">New Password</label>
+                <input
+                  type="password"
+                  name="newPassword"
+                  value={passwordData.newPassword}
+                  onChange={handlePasswordInputChange}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder="Enter new password"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Confirm New Password</label>
+                <input
+                  type="password"
+                  name="confirmPassword"
+                  value={passwordData.confirmPassword}
+                  onChange={handlePasswordInputChange}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder="Confirm new password"
+                />
+              </div>
+            </div>
+
+            <div className="flex justify-end space-x-3 mt-6">
+              <button
+                className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
+                onClick={() => {
+                  setShowChangePasswordModal(false);
+                  setPasswordData({
+                    currentPassword: "",
+                    newPassword: "",
+                    confirmPassword: ""
+                  });
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                onClick={handleChangePassword}
+                disabled={changingPassword}
+              >
+                {changingPassword ? "Changing..." : "Change Password"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 2FA Modal */}
+      {show2FAModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
+            <h3 className="text-lg font-semibold text-gray-800 mb-4">
+              {twoFactorEnabled ? "Two-Factor Authentication" : "Two-Factor Authentication Setup"}
+            </h3>
+
+            {twoFactorEnabled ? (
+              <div className="space-y-4">
+                <p className="text-sm text-gray-600">
+                  Two-factor authentication is currently enabled for your account.
+                </p>
+                <div className="flex justify-end space-x-3">
+                  <button
+                    className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+                    onClick={handleDisable2FA}
+                    disabled={verifying2FA}
+                  >
+                    {verifying2FA ? "Disabling..." : "Disable 2FA"}
+                  </button>
+                  <button
+                    className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
+                    onClick={() => setShow2FAModal(false)}
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <>
+                {twoFactorData.qrCode ? (
+                  <div className="flex flex-col items-center space-y-4">
+                    <img src={twoFactorData.qrCode} alt="2FA QR Code" className="w-48 h-48" />
+                    <p className="text-sm text-gray-600">Scan this QR code with your authenticator app.</p>
+                    <input
+                      type="text"
+                      name="verificationCode"
+                      value={twoFactorData.verificationCode}
+                      onChange={(e) => setTwoFactorData(prev => ({ ...prev, verificationCode: e.target.value }))}
+                      placeholder="Enter verification code"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                    <div className="flex justify-end space-x-3 w-full">
+                      <button
+                        className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
+                        onClick={() => setShow2FAModal(false)}
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        onClick={handleVerify2FA}
+                        disabled={verifying2FA}
+                      >
+                        {verifying2FA ? "Verifying..." : "Verify"}
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center space-y-4">
+                    <p className="text-sm text-gray-600 text-center">
+                      Two-factor authentication adds an extra layer of security to your account by requiring a verification code from your authenticator app.
+                    </p>
+                    <div className="flex justify-center space-x-3">
+                      <button
+                        className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        onClick={handleSetup2FA}
+                        disabled={settingUp2FA}
+                      >
+                        {settingUp2FA ? "Setting up..." : "Setup 2FA"}
+                      </button>
+                      <button
+                        className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
+                        onClick={() => setShow2FAModal(false)}
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Notification Preferences Modal */}
+      {showNotificationsModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
+            <h3 className="text-lg font-semibold text-gray-800 mb-4">Notification Preferences</h3>
+
+            <form className="space-y-4">
+              <div className="flex items-center">
+                <input
+                  type="checkbox"
+                  id="email"
+                  name="email"
+                  checked={notificationPreferences.email}
+                  onChange={handleNotificationInputChange}
+                  className="mr-2"
+                />
+                <label htmlFor="email" className="text-gray-700">Email Notifications</label>
+              </div>
+
+              <div className="flex items-center">
+                <input
+                  type="checkbox"
+                  id="inApp"
+                  name="inApp"
+                  checked={notificationPreferences.inApp}
+                  onChange={handleNotificationInputChange}
+                  className="mr-2"
+                />
+                <label htmlFor="inApp" className="text-gray-700">In-App Notifications</label>
+              </div>
+
+              <div className="flex items-center">
+                <input
+                  type="checkbox"
+                  id="leaveRequests"
+                  name="leaveRequests"
+                  checked={notificationPreferences.leaveRequests}
+                  onChange={handleNotificationInputChange}
+                  className="mr-2"
+                />
+                <label htmlFor="leaveRequests" className="text-gray-700">Leave Requests</label>
+              </div>
+
+              <div className="flex items-center">
+                <input
+                  type="checkbox"
+                  id="payrollUpdates"
+                  name="payrollUpdates"
+                  checked={notificationPreferences.payrollUpdates}
+                  onChange={handleNotificationInputChange}
+                  className="mr-2"
+                />
+                <label htmlFor="payrollUpdates" className="text-gray-700">Payroll Updates</label>
+              </div>
+            </form>
+
+            <div className="flex justify-end space-x-3 mt-6">
+              <button
+                className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
+                onClick={() => setShowNotificationsModal(false)}
+              >
+                Cancel
+              </button>
+              <button
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                onClick={handleUpdateNotifications}
+                disabled={updatingNotifications}
+              >
+                {updatingNotifications ? "Updating..." : "Save"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

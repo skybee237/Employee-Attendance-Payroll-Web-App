@@ -1,0 +1,92 @@
+@startuml Package Diagram
+package "Employee Attendance & Payroll Web App" {
+  package "realize-backend" {
+    package "models" {
+      class Employee
+      class Attendance
+      class LeaveRequest
+      class Justification
+      class PasswordRequest
+    }
+
+    package "controllers" {
+      class AuthController
+      class AttendanceController
+      class LeaveController
+      class JustificationController
+      class SuperiorController
+      class AdminController
+      class PayrollController
+      class PasswordController
+    }
+
+    package "routes" {
+      class AuthRoutes
+      class AttendanceRoutes
+      class LeaveRoutes
+      class JustificationRoutes
+      class SuperiorRoutes
+      class AdminRoutes
+      class PayrollRoutes
+      class PasswordRoutes
+      class ProfilePictureRoutes
+    }
+
+    package "middleware" {
+      class AuthMiddleware
+    }
+
+    package "utils" {
+      class DatabaseManager
+      class DistanceCalculator
+      class PasswordValidator
+    }
+
+    package "config" {
+      class DatabaseConfig
+      class LocationConfig
+    }
+  }
+
+  package "realize-frontend" {
+    package "components" {
+      class Navbar
+      class Sidebar
+      class Card
+    }
+
+    package "pages" {
+      class Login
+      class Dashboard
+      class AdminDashboard
+      class SuperiorDashboard
+      class Attendance
+      class Leave
+      class Justification
+      class CreateEmployee
+      class Reports
+      class JustificationsManagement
+      class ManageEmployees
+      class MyTeam
+      class SuperiorReports
+      class Profile
+      class SuperiorLeavesApproval
+      class SuperiorJustificationsApproval
+      class AllRequests
+      class AdminApprovals
+      class Payroll
+      class ForgotPassword
+    }
+
+    package "api" {
+      class API
+    }
+
+    package "assets" {
+      class Images
+    }
+  }
+}
+
+realize-backend --> realize-frontend : HTTP API
+@enduml

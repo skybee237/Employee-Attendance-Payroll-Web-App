@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { Eye, EyeOff, Copy, RefreshCw, CheckCircle, AlertCircle, Info } from "lucide-react";
+import { toast } from "react-toastify";
 import API from "../api";
 
 const CreateEmployee = ({ onEmployeeCreated }) => {
@@ -20,7 +21,6 @@ const CreateEmployee = ({ onEmployeeCreated }) => {
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [success, setSuccess] = useState(null);
   const [fieldErrors, setFieldErrors] = useState({});
   const [superiors, setSuperiors] = useState([]);
   const [loadingSuperiors, setLoadingSuperiors] = useState(false);
@@ -135,7 +135,6 @@ const CreateEmployee = ({ onEmployeeCreated }) => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError(null);
-    setSuccess(null);
 
     if (form.passwordMethod === "manual" && form.password !== form.confirmPassword) {
       setError("Passwords do not match");
@@ -145,7 +144,7 @@ const CreateEmployee = ({ onEmployeeCreated }) => {
     setLoading(true);
     try {
       const response = await API.post("/api/admin/create", form);
-      setSuccess(`Employee created successfully. ID: ${response.data.employee._id}`);
+      toast.success(`Employee created successfully. name: ${response.data.employee.name}`);
       if (onEmployeeCreated) onEmployeeCreated(response.data.employee);
       setForm({
         name: "",
@@ -182,13 +181,7 @@ const CreateEmployee = ({ onEmployeeCreated }) => {
         <p className="text-gray-600">Fill in the details below to add a new employee</p>
       </div>
 
-      {/* Success & Error messages */}
-      {success && (
-        <div className="mb-4 p-4 bg-green-50 border border-green-200 rounded-lg flex items-start">
-          <CheckCircle className="w-5 h-5 text-green-600 mr-2 mt-0.5" />
-          <p className="text-green-800">{success}</p>
-        </div>
-      )}
+      {/* Error messages */}
       {error && (
         <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg flex items-start">
           <AlertCircle className="w-5 h-5 text-red-600 mr-2 mt-0.5" />

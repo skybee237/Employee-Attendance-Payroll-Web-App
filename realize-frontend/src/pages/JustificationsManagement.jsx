@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useLocation } from "react-router-dom";
 import API from "../api";
 import { toast } from "react-toastify";
 
@@ -6,6 +7,7 @@ const JustificationsManagement = () => {
   const [justifications, setJustifications] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState("all"); // all, pending, approved, rejected
+  const location = useLocation();
 
   const fetchJustifications = async () => {
     try {
@@ -57,6 +59,16 @@ const JustificationsManagement = () => {
   useEffect(() => {
     fetchJustifications();
   }, []);
+
+  useEffect(() => {
+    if (location.pathname === '/justification/pending') {
+      setFilter('pending');
+    } else if (location.pathname === '/justification/history') {
+      setFilter('approved');
+    } else {
+      setFilter('all');
+    }
+  }, [location.pathname]);
 
   if (loading) {
     return (
@@ -115,8 +127,8 @@ const JustificationsManagement = () => {
                 <div className="flex justify-between items-start mb-4">
                   <div className="flex-1">
                     <div className="flex items-center space-x-3 mb-2">
-                      <h3 className="text-lg font-semibold text-gray-900">
-                        {justification.employeeName || `Employee ${justification.employeeId}`}
+                    <h3 className="text-lg font-semibold text-gray-900">
+                        {justification.employeeId?.name || `Employee ${justification.employeeId}`}
                       </h3>
                       <span className={`px-3 py-1 text-sm font-medium rounded-full ${getStatusColor(justification.status)}`}>
                         {justification.status}
@@ -125,7 +137,7 @@ const JustificationsManagement = () => {
                     <p className="text-gray-600 mb-2">{justification.reason}</p>
                     <div className="flex items-center space-x-4 text-sm text-gray-500">
                       <span>📅 {formatDate(justification.createdAt)}</span>
-                      <span>🏢 {justification.employeeId}</span>
+                      <span>🏢 {justification.employeeId?._id || justification.employeeId}</span>
                     </div>
                   </div>
 

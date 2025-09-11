@@ -31,3 +31,9 @@ API.interceptors.response.use(
 );
 
 export default API;
+
+export const fetchPayrollAll = (year, month) => {
+  return API.get("/api/payroll/all", {
+    params: { year, month }
+  });
+};

@@ -1,0 +1,34 @@
+@startuml Sequence Diagram - Employee Login Process
+
+actor Employee
+participant "Login Page" as LoginPage
+participant "API Service" as API
+participant "Auth Routes" as AuthRoutes
+participant "Auth Controller" as AuthController
+participant "Employee Model" as EmployeeModel
+participant "JWT" as JWT
+database "MongoDB" as DB
+
+Employee -> LoginPage: Enter email & password
+LoginPage -> API: POST /api/auth/login
+API -> AuthRoutes: Route request
+AuthRoutes -> AuthController: login(req, res)
+
+AuthController -> EmployeeModel: findOne({email})
+EmployeeModel -> DB: Query employee
+DB --> EmployeeModel: Return employee data
+EmployeeModel --> AuthController: Employee object
+
+AuthController -> AuthController: Validate password (bcrypt.compare)
+AuthController -> AuthController: Check location validation
+AuthController -> AuthController: Generate JWT token
+
+AuthController -> JWT: sign({id, role}, secret)
+JWT --> AuthController: Return token
+
+AuthController --> AuthRoutes: Return {token, role, employeeId}
+AuthRoutes --> API: Return response
+API --> LoginPage: Return success with token
+LoginPage --> Employee: Redirect to dashboard
+
+@enduml

@@ -1,0 +1,32 @@
+@startuml Deployment Diagram
+
+node "Web Browser" as Browser {
+  artifact "React Frontend" as Frontend
+}
+
+node "Web Server" as Server {
+  artifact "Express Backend" as Backend
+}
+
+database "MongoDB Database" as DB {
+  artifact "Employee Collection" as EmpColl
+  artifact "Attendance Collection" as AttColl
+  artifact "LeaveRequest Collection" as LeaveColl
+  artifact "Justification Collection" as JustColl
+  artifact "PasswordRequest Collection" as PassColl
+}
+
+node "File Storage" as Storage {
+  artifact "Profile Pictures" as Images
+}
+
+Browser --> Server : HTTP/HTTPS
+Server --> DB : MongoDB Connection
+Server --> Storage : File Upload/Download
+
+note right of Browser : User Interface\nReact Components\nPages
+note right of Server : API Endpoints\nBusiness Logic\nAuthentication
+note right of DB : Data Persistence\nUser Data\nAttendance Records
+note right of Storage : Static Files\nProfile Images
+
+@enduml

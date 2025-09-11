@@ -233,7 +233,7 @@ const Navbar = ({
           >
             {profilePicture ? (
               <img
-                src={profilePicture}
+                src={`http://localhost:5000${profilePicture}?t=${Date.now()}`}
                 alt="Profile"
                 className="w-8 h-8 rounded-full object-cover"
               />

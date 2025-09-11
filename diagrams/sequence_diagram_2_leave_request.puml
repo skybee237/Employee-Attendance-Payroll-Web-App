@@ -1,0 +1,43 @@
+@startuml Sequence Diagram - Leave Request Submission and Approval
+
+actor Employee
+participant "Leave Page" as LeavePage
+participant "API Service" as API
+participant "Leave Routes" as LeaveRoutes
+participant "Leave Controller" as LeaveController
+participant "LeaveRequest Model" as LeaveModel
+participant "Superior Controller" as SuperiorController
+database "MongoDB" as DB
+
+Employee -> LeavePage: Fill leave request form
+LeavePage -> API: POST /api/leave/request
+API -> LeaveRoutes: Route request
+LeaveRoutes -> LeaveController: createLeaveRequest(req, res)
+
+LeaveController -> LeaveModel: new LeaveRequest({...})
+LeaveModel -> DB: Save leave request
+DB --> LeaveModel: Return saved request
+LeaveModel --> LeaveController: LeaveRequest object
+
+LeaveController --> LeaveRoutes: Return success
+LeaveRoutes --> API: Return response
+API --> LeavePage: Return success
+LeavePage --> Employee: Show success message
+
+== Superior Approval Process ==
+
+SuperiorController -> LeaveModel: find({superiorId, status: 'Pending'})
+LeaveModel -> DB: Query pending requests
+DB --> LeaveModel: Return requests
+LeaveModel --> SuperiorController: Pending requests
+
+SuperiorController -> SuperiorController: Process approval/rejection
+SuperiorController -> LeaveModel: findByIdAndUpdate(id, {status})
+LeaveModel -> DB: Update status
+DB --> LeaveModel: Updated request
+LeaveModel --> SuperiorController: Updated request
+
+SuperiorController --> API: Return updated request
+API --> LeavePage: Return updated status
+
+@enduml

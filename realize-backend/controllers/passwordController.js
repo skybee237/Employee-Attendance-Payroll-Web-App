@@ -43,34 +43,47 @@ exports.approveRequest = async (req, res) => {
   res.json({ message: "Password reset approved" });
 };
 
-// Employee changes their own password
 exports.changePassword = async (req, res) => {
-  const { employeeId, currentPassword, newPassword } = req.body;
+  const { currentPassword, newPassword, confirmPassword } = req.body;
+  const employeeId = req.user.id; // Assuming authMiddleware sets req.user
 
   try {
+    // Find the employee
     const employee = await Employee.findById(employeeId);
-    if (!employee) return res.status(404).json({ error: "Employee not found" });
+    if (!employee) {
+      return res.status(404).json({ error: "Employee not found" });
+    }
 
     // Verify current password
-    const isMatch = await bcrypt.compare(currentPassword, employee.password);
-    if (!isMatch) return res.status(400).json({ error: "Current password is incorrect" });
+    const isCurrentPasswordValid = await bcrypt.compare(currentPassword, employee.password);
+    if (!isCurrentPasswordValid) {
+      return res.status(400).json({ error: "Current password is incorrect" });
+    }
+
+    // Check if new password matches confirmation
+    if (newPassword !== confirmPassword) {
+      return res.status(400).json({ error: "New password and confirmation do not match" });
+    }
 
     // Validate new password
     const validation = passwordValidator.validatePassword(newPassword);
     if (!validation.isValid) {
-      return res.status(400).json({ 
-        error: "Password does not meet requirements", 
-        details: validation.errors 
+      return res.status(400).json({
+        error: "Password does not meet requirements",
+        details: validation.errors
       });
     }
 
-    // Hash and save new password
-    const hashed = await bcrypt.hash(newPassword, 10);
-    employee.password = hashed;
+    // Hash the new password
+    const hashedNewPassword = await bcrypt.hash(newPassword, 10);
+
+    // Update the employee's password
+    employee.password = hashedNewPassword;
     await employee.save();
 
     res.json({ message: "Password changed successfully" });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
+  } catch (error) {
+    console.error("Error changing password:", error);
+    res.status(500).json({ error: "Internal server error" });
   }
 };

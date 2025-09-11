@@ -173,6 +173,17 @@ exports.checkOut = async (req, res) => {
       return res.status(400).json({ error: "Already checked out today" });
     }
 
+    // Check if current time is before 6pm (18:00)
+    const now = new Date();
+    const currentHour = now.getHours();
+    const currentMinute = now.getMinutes();
+
+    if (currentHour < 18 || (currentHour === 18 && currentMinute < 0)) {
+      return res.status(400).json({
+        error: "Check-out is only allowed at or after 6:00 PM"
+      });
+    }
+
     // Update check-out time and location (if provided)
     attendance.checkOut = new Date();
     if (latitude && longitude) {

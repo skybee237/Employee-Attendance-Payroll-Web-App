@@ -1,57 +1,38 @@
-or
-# Implementation Plan for All Requests, Approvals, and Reports
+# TODO: Implement User Password Edit Functionality
 
-## Overview
-The application already has partial implementations for requests, approvals, and reports. This plan outlines the steps to complete and enhance these features.
+## Backend Changes
+- [x] Update `realize-backend/controllers/passwordController.js` to implement `changePassword` function
+  - Accept currentPassword, newPassword, confirmPassword
+  - Verify current password matches user's password
+  - Validate new password using passwordValidator
+  - Hash new password and update employee record
+  - Return appropriate success/error responses
 
-## Current Status
-- ✅ Reports: Admin reports page exists (Reports.jsx)
-- ✅ Approvals: Admin can approve justifications (JustificationsManagement.jsx)
-- ✅ Requests: Basic request submission exists for leaves and justifications
-- ✅ Superior approval UI implemented
-- ✅ Unified "All Requests" page implemented and tested
-- ❌ Password request management missing
+## Frontend Changes
+- [x] Update `realize-frontend/src/pages/Profile.jsx` to add change password UI
+  - Remove admin-only restriction for Change Password button
+  - Add modal/form for password change inputs (current, new, confirm)
+  - Add client-side validation
+  - Implement API call to /api/password/change
+  - Handle success/error responses with toast notifications
 
-## Implementation Steps
+## Testing
+- [x] Backend and frontend implementation completed - basic syntax verified
+- [ ] Full testing deferred per user preference
 
-### 1. Backend Enhancements
-- [x] Add approval endpoints for superiors in superiorController.js
-- [ ] Add password request management endpoints
-- [x] Update routes for superior approvals and password requests
+# New Task: Implement Two-Factor Authentication and Notification Preferences
 
-### 2. Frontend Pages
-- [x] Create SuperiorLeavesApproval.jsx page for superiors to approve/reject leave requests
-- [x] Create SuperiorJustificationsApproval.jsx page for superiors to approve/reject justifications
-- [x] Create AllRequests.jsx page to display all types of requests (leaves, justifications, password requests)
-- [ ] Create PasswordRequestsManagement.jsx for admin to manage password requests
+## Two-Factor Authentication (2FA)
+- [x] Install 2FA library (speakeasy) in backend
+- [x] Update Employee model to store 2FA secret
+- [x] Backend: Add endpoints for 2FA setup, verification, disable
+- [x] Update login/auth flow to require 2FA if enabled
+- [x] Frontend: Add 2FA setup modal with QR code and verification
+- [x] Update Profile.jsx Enable 2FA button functionality
 
-### 3. Navigation Updates
-- [x] Update Sidebar.jsx to include navigation links for new pages
-- [x] Update App.jsx routing to include new pages
-
-### 4. UI Enhancements
-- [x] Enhance SuperiorDashboard.jsx with direct approval actions
-- [ ] Add approval status indicators and notifications
-- [ ] Improve request filtering and search functionality
-
-### 5. Integration and Testing
-- [x] Fixed AllRequests.jsx to work with existing backend (removed password requests)
-- [x] Verified navigation and routing work correctly
-- [x] Fixed broken `/admin/pending` navigation link to redirect to `/all-requests`
-- [x] Fixed "My Team" navigation path from "/MyTeam" to "/superior/team"
-- [x] Fixed "Team Reports" navigation path from "/Reports" to "/admin/reports"
-- [ ] Test all approval workflows for superiors and admins
-- [ ] Verify request submission and approval processes
-- [ ] Test reports generation and export functionality
-
-## File Dependencies
-- Backend: superiorController.js, adminController.js, routes files
-- Frontend: SuperiorDashboard.jsx, Sidebar.jsx, App.jsx, new approval pages
-- Models: Ensure LeaveRequest, Justification, PasswordRequest models support approval workflow
-
-## Priority Order
-1. Backend approval endpoints for superiors
-2. Superior approval UI pages
-3. All Requests unified page
-4. Password request management
-5. Navigation and integration updates
+## Notification Preferences
+- [x] Design notification preferences structure (email, in-app, etc.)
+- [x] Backend: Add notification preferences to Employee model or separate model
+- [x] Backend: Add endpoints to get/set notification preferences
+- [x] Frontend: Add notification preferences modal with toggles
+- [x] Update Profile.jsx Manage button functionality

@@ -3,6 +3,8 @@ const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 const passwordValidator = require("../utils/passwordValidator");
 const axios = require("axios");
+const speakeasy = require("speakeasy");
+const qrcode = require("qrcode");
 
 const SITE_LOCATION = { lat: 3.8370057, lng: 11.5335042 }; // Yaoundé, Cameroon
 const MAX_DISTANCE_METERS = 3867; // User must be within 5 meters of the site location
@@ -65,6 +67,19 @@ const login = async (req, res) => {
     console.log("User found:", user);
     if (!user) {
       return res.status(400).json({ error: "Invalid email" });
+    }
+
+    // Check if account is active
+    if (!user.isActive) {
+      return res.status(403).json({ error: "Account is deactivated. Please contact admin." });
+    }
+
+    // Check if account is suspended
+    if (user.isSuspended) {
+      return res.status(403).json({
+        error: "Account is suspended",
+        reason: user.suspensionReason || "No reason provided"
+      });
     }
 
     console.log("user role:", user.role);
@@ -183,6 +198,8 @@ const forgotPassword = async (req, res) => {
   res.json({ message: "Password reset request sent to admin." });
 };
 
+
+
 // ------------------- GET ROLE -------------------
 const getRole = async (req, res) => {
   const { email } = req.body;
@@ -210,7 +227,7 @@ const logout = async (req, res) => {
 const getProfile = async (req, res) => {
   try {
     const userId = req.user.id;
-    const user = await Employee.findById(userId).select('name email role profilePicture position department phone address');
+    const user = await Employee.findById(userId).select('name email role profilePicture position department phone address twoFactorEnabled');
 
     if (!user) {
       return res.status(404).json({ error: "User not found" });
@@ -225,7 +242,8 @@ const getProfile = async (req, res) => {
       department: user.department,
       phone: user.phone,
       address: user.address,
-      createdAt: user.createdAt
+      createdAt: user.createdAt,
+      twoFactorEnabled: user.twoFactorEnabled
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -271,6 +289,165 @@ const updateProfile = async (req, res) => {
   }
 };
 
+// ------------------- 2FA SETUP -------------------
+const setup2FA = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const user = await Employee.findById(userId);
+
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    if (user.twoFactorEnabled) {
+      return res.status(400).json({ error: "2FA is already enabled" });
+    }
+
+    // Generate secret
+    const secret = speakeasy.generateSecret({
+      name: `Employee Attendance App (${user.email})`,
+      issuer: 'Realize App'
+    });
+
+    // Generate QR code
+    const qrCodeUrl = await qrcode.toDataURL(secret.otpauth_url);
+
+    // Save secret temporarily (not enabled yet)
+    user.twoFactorSecret = secret.base32;
+    await user.save();
+
+    res.json({
+      secret: secret.base32,
+      qrCode: qrCodeUrl,
+      message: "Scan the QR code with your authenticator app and enter the code to verify"
+    });
+  } catch (err) {
+    console.error("Error setting up 2FA:", err);
+    res.status(500).json({ error: "Failed to setup 2FA" });
+  }
+};
+
+// ------------------- 2FA VERIFY -------------------
+const verify2FA = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { token } = req.body;
+
+    const user = await Employee.findById(userId);
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    if (user.twoFactorEnabled) {
+      return res.status(400).json({ error: "2FA is already enabled" });
+    }
+
+    if (!user.twoFactorSecret) {
+      return res.status(400).json({ error: "2FA setup not initiated" });
+    }
+
+    // Verify token
+    const verified = speakeasy.totp.verify({
+      secret: user.twoFactorSecret,
+      encoding: 'base32',
+      token: token,
+      window: 2 // Allow 2 time windows (30 seconds each)
+    });
+
+    if (!verified) {
+      return res.status(400).json({ error: "Invalid verification code" });
+    }
+
+    // Enable 2FA
+    user.twoFactorEnabled = true;
+    await user.save();
+
+    res.json({ message: "2FA enabled successfully" });
+  } catch (err) {
+    console.error("Error verifying 2FA:", err);
+    res.status(500).json({ error: "Failed to verify 2FA" });
+  }
+};
+
+// ------------------- 2FA DISABLE -------------------
+const disable2FA = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { password } = req.body;
+
+    const user = await Employee.findById(userId);
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    if (!user.twoFactorEnabled) {
+      return res.status(400).json({ error: "2FA is not enabled" });
+    }
+
+    // Verify password before disabling
+    const isPasswordValid = await bcrypt.compare(password, user.password);
+    if (!isPasswordValid) {
+      return res.status(400).json({ error: "Invalid password" });
+    }
+
+    // Disable 2FA
+    user.twoFactorEnabled = false;
+    user.twoFactorSecret = null;
+    await user.save();
+
+    res.json({ message: "2FA disabled successfully" });
+  } catch (err) {
+    console.error("Error disabling 2FA:", err);
+    res.status(500).json({ error: "Failed to disable 2FA" });
+  }
+};
+
+// ------------------- GET NOTIFICATION PREFERENCES -------------------
+const getNotificationPreferences = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const user = await Employee.findById(userId).select('notificationPreferences');
+
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    res.json(user.notificationPreferences);
+  } catch (err) {
+    console.error("Error getting notification preferences:", err);
+    res.status(500).json({ error: "Failed to get notification preferences" });
+  }
+};
+
+// ------------------- UPDATE NOTIFICATION PREFERENCES -------------------
+const updateNotificationPreferences = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { email, inApp, leaveRequests, payrollUpdates } = req.body;
+
+    const user = await Employee.findById(userId);
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    // Update preferences
+    if (email !== undefined) user.notificationPreferences.email = email;
+    if (inApp !== undefined) user.notificationPreferences.inApp = inApp;
+    if (leaveRequests !== undefined) user.notificationPreferences.leaveRequests = leaveRequests;
+    if (payrollUpdates !== undefined) user.notificationPreferences.payrollUpdates = payrollUpdates;
+
+    await user.save();
+
+    res.json({
+      message: "Notification preferences updated successfully",
+      preferences: user.notificationPreferences
+    });
+  } catch (err) {
+    console.error("Error updating notification preferences:", err);
+    res.status(500).json({ error: "Failed to update notification preferences" });
+  }
+};
+
 // ✅ EXPORT properly so your routes work
 module.exports = {
   login,
@@ -279,4 +456,9 @@ module.exports = {
   logout,
   getProfile,
   updateProfile,
+  setup2FA,
+  verify2FA,
+  disable2FA,
+  getNotificationPreferences,
+  updateNotificationPreferences,
 };

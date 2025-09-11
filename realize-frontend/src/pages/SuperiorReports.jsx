@@ -2,6 +2,8 @@ import { useState, useEffect } from "react";
 import API from "../api";
 import Card from "../components/Card";
 import { toast } from "react-toastify";
+import jsPDF from "jspdf";
+
 
 const SuperiorReports = ({ superiorId }) => {
   const [loading, setLoading] = useState(true);
@@ -124,6 +126,46 @@ const SuperiorReports = ({ superiorId }) => {
     toast.success("Report exported successfully");
   };
 
+  const exportToPDF = (data, filename, title) => {
+    if (!data || data.length === 0) {
+      toast.warning("No data to export");
+      return;
+    }
+    const doc = new jsPDF();
+    doc.setFontSize(18);
+    doc.text(title, 14, 22);
+    doc.setFontSize(11);
+    doc.setTextColor(100);
+
+    const headers = [Object.keys(data[0])];
+    const rows = data.map(row => Object.values(row));
+
+    // AutoTable plugin can be used if available, else manual table
+    if (doc.autoTable) {
+      doc.autoTable({
+        head: headers,
+        body: rows,
+        startY: 30,
+      });
+    } else {
+      // Simple manual table rendering
+      let y = 30;
+      headers[0].forEach((header, i) => {
+        doc.text(header.toString(), 14 + i * 40, y);
+      });
+      y += 10;
+      rows.forEach(row => {
+        row.forEach((cell, i) => {
+          doc.text(cell ? cell.toString() : '', 14 + i * 40, y);
+        });
+        y += 10;
+      });
+    }
+
+    doc.save(`${filename}_${new Date().toISOString().split('T')[0]}.pdf`);
+    toast.success("Report exported successfully as PDF");
+  };
+
   useEffect(() => {
     if (superiorId) {
       fetchReportData();
@@ -194,6 +236,12 @@ const SuperiorReports = ({ superiorId }) => {
           >
             Export CSV
           </button>
+          <button
+            className="ml-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+            onClick={() => exportToPDF(reportData.subordinates, 'team_performance', 'Team Member Performance')}
+          >
+            Export PDF
+          </button>
         </div>
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200">
@@ -245,6 +293,12 @@ const SuperiorReports = ({ superiorId }) => {
           >
             Export CSV
           </button>
+          <button
+            className="ml-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+            onClick={() => exportToPDF(reportData.attendanceStats, 'team_attendance_trends', 'Team Attendance Trends')}
+          >
+            Export PDF
+          </button>
         </div>
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200">
@@ -283,6 +337,12 @@ const SuperiorReports = ({ superiorId }) => {
             onClick={() => exportToCSV(reportData.leaveStats, 'team_leave_statistics')}
           >
             Export CSV
+          </button>
+          <button
+            className="ml-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+            onClick={() => exportToPDF(reportData.leaveStats, 'team_leave_statistics', 'Team Leave Statistics')}
+          >
+            Export PDF
           </button>
         </div>
         <div className="overflow-x-auto">

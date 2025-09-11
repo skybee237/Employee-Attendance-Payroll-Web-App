@@ -161,7 +161,7 @@ const AdminSuperiorManagement = () => {
                   <div className="flex justify-between items-start">
                     <div className="flex-1">
                       <h3 className="font-semibold text-lg">
-                        {leave.superiorId?.name || `Superior ${leave.superiorId}`}
+                        {leave.superiorId?.name || `Superior ${leave.superiorId || 'N/A'}`}
                       </h3>
                       <p className="text-gray-600">{leave.superiorId?.email}</p>
                       <p className="mt-2 text-sm">
@@ -225,7 +225,7 @@ const AdminSuperiorManagement = () => {
                   <div className="flex justify-between items-start">
                     <div className="flex-1">
                       <h3 className="font-semibold text-lg">
-                        {justification.superiorId?.name || `Superior ${justification.superiorId}`}
+                        {justification.superiorId?.name || `Superior ${justification.superiorId || 'N/A'}`}
                       </h3>
                       <p className="text-gray-600">{justification.superiorId?.email}</p>
                       <p className="mt-2">

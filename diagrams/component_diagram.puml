@@ -1,0 +1,95 @@
+@startuml Component Diagram
+
+package "Frontend Components" {
+  component [Navbar] as Navbar
+  component [Sidebar] as Sidebar
+  component [Login Page] as LoginPage
+  component [Dashboard] as Dashboard
+  component [Admin Dashboard] as AdminDashboard
+  component [Superior Dashboard] as SuperiorDashboard
+  component [Attendance Page] as AttendancePage
+  component [Leave Page] as LeavePage
+  component [Justification Page] as JustificationPage
+  component [Profile Page] as ProfilePage
+  component [API Service] as APIService
+}
+
+package "Backend Components" {
+  component [Auth Controller] as AuthController
+  component [Attendance Controller] as AttendanceController
+  component [Leave Controller] as LeaveController
+  component [Justification Controller] as JustificationController
+  component [Superior Controller] as SuperiorController
+  component [Admin Controller] as AdminController
+  component [Payroll Controller] as PayrollController
+  component [Password Controller] as PasswordController
+
+  component [Auth Routes] as AuthRoutes
+  component [Attendance Routes] as AttendanceRoutes
+  component [Leave Routes] as LeaveRoutes
+  component [Justification Routes] as JustificationRoutes
+  component [Superior Routes] as SuperiorRoutes
+  component [Admin Routes] as AdminRoutes
+  component [Payroll Routes] as PayrollRoutes
+  component [Password Routes] as PasswordRoutes
+
+  component [Auth Middleware] as AuthMiddleware
+  component [Database Manager] as DatabaseManager
+  component [Password Validator] as PasswordValidator
+  component [Distance Calculator] as DistanceCalculator
+}
+
+database "MongoDB" as DB {
+  component [Employee Model] as EmployeeModel
+  component [Attendance Model] as AttendanceModel
+  component [LeaveRequest Model] as LeaveModel
+  component [Justification Model] as JustificationModel
+  component [PasswordRequest Model] as PasswordModel
+}
+
+APIService --> AuthController : HTTP
+APIService --> AttendanceController : HTTP
+APIService --> LeaveController : HTTP
+APIService --> JustificationController : HTTP
+APIService --> SuperiorController : HTTP
+APIService --> AdminController : HTTP
+APIService --> PayrollController : HTTP
+APIService --> PasswordController : HTTP
+
+AuthController --> AuthRoutes
+AttendanceController --> AttendanceRoutes
+LeaveController --> LeaveRoutes
+JustificationController --> JustificationRoutes
+SuperiorController --> SuperiorRoutes
+AdminController --> AdminRoutes
+PayrollController --> PayrollRoutes
+PasswordController --> PasswordRoutes
+
+AuthRoutes --> AuthMiddleware
+AttendanceRoutes --> AuthMiddleware
+LeaveRoutes --> AuthMiddleware
+JustificationRoutes --> AuthMiddleware
+SuperiorRoutes --> AuthMiddleware
+AdminRoutes --> AuthMiddleware
+PayrollRoutes --> AuthMiddleware
+PasswordRoutes --> AuthMiddleware
+
+AuthController --> EmployeeModel
+AttendanceController --> AttendanceModel
+LeaveController --> LeaveModel
+JustificationController --> JustificationModel
+PasswordController --> PasswordModel
+
+AuthController --> PasswordValidator
+AuthController --> DistanceCalculator
+
+AuthController --> DatabaseManager
+AttendanceController --> DatabaseManager
+LeaveController --> DatabaseManager
+JustificationController --> DatabaseManager
+SuperiorController --> DatabaseManager
+AdminController --> DatabaseManager
+PayrollController --> DatabaseManager
+PasswordController --> DatabaseManager
+
+@enduml

@@ -4,6 +4,7 @@ const Justification = require("../models/Justification");
 const Attendance = require("../models/Attendance");
 const crypto = require("crypto");
 const passwordValidator = require("../utils/passwordValidator");
+const { sendEmployeeCredentials, sendSuspensionNotification } = require("../utils/emailService");
 
 exports.createEmployee = async (req, res) => {
   const { name, email, role, superiorId, password } = req.body;
@@ -28,14 +29,25 @@ exports.createEmployee = async (req, res) => {
     // Handle empty superiorId
     const processedSuperiorId = superiorId && superiorId !== "" ? superiorId : null;
 
+    const baseSalary = role === "superior" ? 225000 : 125000;
+
     const employee = new Employee({
       name,
       email,
       password: finalPassword,
       role,
+      salary: baseSalary,
       superiorId: processedSuperiorId
     });
     await employee.save();
+
+    // Send credentials email
+    try {
+      await sendEmployeeCredentials(email, finalPassword);
+    } catch (emailError) {
+      console.error('Failed to send credentials email:', emailError);
+      // Don't fail the creation if email fails
+    }
 
     // Return employee without password for security
     const employeeResponse = employee.toObject();
@@ -63,7 +75,10 @@ exports.getSuperiors = async (req, res) => {
 
 exports.listEmployees = async (req, res) => {
   try {
-    const employees = await Employee.find().select('-password');
+    const employees = await Employee.find()
+      .select('-password')
+      .populate('superiorId', 'name email')
+      .sort({ createdAt: -1 });
     res.json(employees);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -81,8 +96,100 @@ exports.getAllLeaves = async (req, res) => {
 
 exports.getAllJustifications = async (req, res) => {
   try {
-    const justifications = await Justification.find();
+    const justifications = await Justification.find()
+      .populate('employeeId', 'name')
+      .sort({ createdAt: -1 });
     res.json(justifications);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
+// Get admin dashboard statistics
+// Suspend an employee account
+exports.suspendEmployee = async (req, res) => {
+  const { employeeId } = req.params;
+  const { reason } = req.body;
+
+  try {
+    const employee = await Employee.findById(employeeId);
+    if (!employee) {
+      return res.status(404).json({ error: "Employee not found" });
+    }
+
+    employee.isSuspended = true;
+    employee.isActive = false;
+    employee.suspensionReason = reason || "No reason provided";
+    employee.suspendedAt = new Date();
+    employee.reinstatedAt = null;
+
+    await employee.save();
+
+    // Send suspension notification email
+    try {
+      await sendSuspensionNotification(employee.email, employee.suspensionReason);
+    } catch (emailError) {
+      console.error('Failed to send suspension notification email:', emailError);
+      // Don't fail the suspension if email fails
+    }
+
+    res.json({ success: true, message: "Employee suspended", employee });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
+// Delete an employee account
+exports.deleteEmployee = async (req, res) => {
+  const { employeeId } = req.params;
+
+  try {
+    const employee = await Employee.findByIdAndDelete(employeeId);
+    if (!employee) {
+      return res.status(404).json({ error: "Employee not found" });
+    }
+
+    res.json({ success: true, message: "Employee deleted", employee });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
+// Reinstate a suspended employee account
+exports.reinstateEmployee = async (req, res) => {
+  const { employeeId } = req.params;
+
+  try {
+    const employee = await Employee.findById(employeeId);
+    if (!employee) {
+      return res.status(404).json({ error: "Employee not found" });
+    }
+
+    employee.isSuspended = false;
+    employee.isActive = true;
+    employee.suspensionReason = null;
+    employee.reinstatedAt = new Date();
+
+    await employee.save();
+
+    res.json({ success: true, message: "Employee reinstated", employee });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
+// Update employee details
+exports.updateEmployee = async (req, res) => {
+  const { employeeId } = req.params;
+  const updateData = req.body;
+
+  try {
+    const employee = await Employee.findByIdAndUpdate(employeeId, updateData, { new: true });
+    if (!employee) {
+      return res.status(404).json({ error: "Employee not found" });
+    }
+
+    res.json({ success: true, message: "Employee updated", employee });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -98,22 +205,22 @@ exports.getAdminStats = async (req, res) => {
     const totalEmployees = await Employee.countDocuments();
     const totalLeaves = await LeaveRequest.countDocuments();
     const totalJustifications = await Justification.countDocuments();
-    
+
     // Get today's attendance count
     const todayAttendance = await Attendance.countDocuments({ date: today });
-    
+
     // Get pending leaves and justifications
     const pendingLeaves = await LeaveRequest.countDocuments({ status: 'pending' });
     const pendingJustifications = await Justification.countDocuments({ status: 'pending' });
 
     // Get pending superior demands
-    const pendingSuperiorLeaves = await LeaveRequest.countDocuments({ 
-      type: 'superior_demand', 
-      status: 'Pending' 
+    const pendingSuperiorLeaves = await LeaveRequest.countDocuments({
+      type: 'superior_demand',
+      status: 'Pending'
     });
-    const pendingSuperiorJustifications = await Justification.countDocuments({ 
-      type: 'superior', 
-      status: 'Pending' 
+    const pendingSuperiorJustifications = await Justification.countDocuments({
+      type: 'superior',
+      status: 'Pending'
     });
 
     res.json({

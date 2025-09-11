@@ -1,9 +1,16 @@
 import { Link, useLocation } from "react-router-dom";
 import { useState } from "react";
+import myIcon from "../assets/image/image.png";
+
 
 const Sidebar = ({ userRole = "employee", userName = "User", userEmail = "user@example.com" }) => {
   const location = useLocation();
-  const [isCollapsed, setIsCollapsed] = useState(userRole === "admin" ? false : false); // Always expanded for admin
+  const [isCollapsed, setIsCollapsed] = useState(false);
+
+  // Add toggle button handler
+  const toggleSidebar = () => {
+    setIsCollapsed(!isCollapsed);
+  };
   const [activeSubmenu, setActiveSubmenu] = useState(null);
 
   // Navigation items based on role
@@ -11,6 +18,7 @@ const Sidebar = ({ userRole = "employee", userName = "User", userEmail = "user@e
     admin: [
       { id: "dashboard", path: "/", label: "Dashboard", icon: "📊" },
       { id: "employees", path: "/create-employee", label: "Create Employee", icon: "👥" },
+      { id: "manage-employees", path: "/admin/manage-employees", label: "Manage Employees", icon: "👨‍💼" },
       {
         id: "attendance",
         path: "/attendance",
@@ -24,8 +32,8 @@ const Sidebar = ({ userRole = "employee", userName = "User", userEmail = "user@e
         icon: "📅",
         submenu: [
           { path: "/all-requests", label: "All Requests" },
-          { path: "/leave/approvals", label: "Approvals" },
-          { path: "/leave/reports", label: "Reports" }
+          { path: "/admin/approvals", label: "Approvals" },
+          { path: "/admin/reports", label: "Reports" }
         ]
       },
       { 
@@ -44,8 +52,8 @@ const Sidebar = ({ userRole = "employee", userName = "User", userEmail = "user@e
         label: "Superior Management", 
         icon: "👑" 
       },
-      { id: "reports", path: "/reports", label: "Analytics", icon: "📈" },
-      { id: "settings", path: "/settings", label: "Settings", icon: "⚙️" }
+      { id: "reports", path: "/admin/reports", label: "Analytics", icon: "📈" },
+
     ],
     superior: [
       { id: "dashboard", path: "/", label: "Dashboard", icon: "📊" },
@@ -85,40 +93,20 @@ const Sidebar = ({ userRole = "employee", userName = "User", userEmail = "user@e
       <div className="p-4 border-b border-gray-700 flex items-center justify-between">
         {!isCollapsed && (
           <h2 className="text-xl font-bold flex items-center">
-            <span className="text-blue-400 mr-2">⚡</span>
+            <span className="text-blue-400 mr-2">
+            <img src={myIcon} alt="icon" width="50" height="50" />
+            </span>
             Realize
           </h2>
         )}
-        {userRole !== "admin" && (
-          <button
-            onClick={() => setIsCollapsed(!isCollapsed)}
-            className="p-1 rounded hover:bg-gray-700 transition-colors"
-            title={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
-          >
-            {isCollapsed ? "➡️" : "⬅️"}
-          </button>
-        )}
+        <button
+          onClick={toggleSidebar}
+          className="p-1 rounded hover:bg-gray-700 transition-colors"
+          title={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+        >
+          {isCollapsed ? "➡️" : "⬅️"}
+        </button>
       </div>
-
-      {/* User Profile */}
-      {!isCollapsed && (
-        <div className="p-4 border-b border-gray-700">
-          <div className="flex items-center space-x-3">
-            <div className="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center text-white font-semibold">
-              {userName.charAt(0).toUpperCase()}
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="font-medium truncate">{userName}</p>
-              <p className="text-gray-400 text-sm truncate">{userEmail}</p>
-            </div>
-          </div>
-          <div className="mt-2">
-            <span className="inline-block px-2 py-1 bg-blue-900 text-blue-200 text-xs rounded-full capitalize">
-              {userRole}
-            </span>
-          </div>
-        </div>
-      )}
 
       {/* Navigation */}
       <nav className="flex-1 overflow-y-auto py-4 scrollbar-hide">
@@ -187,14 +175,7 @@ const Sidebar = ({ userRole = "employee", userName = "User", userEmail = "user@e
         </div>
       )}
 
-      {/* Collapsed mode user avatar */}
-      {isCollapsed && (
-        <div className="mt-auto p-4 border-t border-gray-700 flex justify-center">
-          <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center text-white font-semibold text-sm">
-            {userName.charAt(0).toUpperCase()}
-          </div>
-        </div>
-      )}
+
     </div>
   );
 };

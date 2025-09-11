@@ -1,0 +1,84 @@
+@startuml Object Diagram
+
+object "johnDoe : Employee" as johnDoe {
+  _id = "64f1a2b3c4d5e6f7g8h9i0j"
+  name = "John Doe"
+  email = "john.doe@company.com"
+  password = "$2a$10$..."
+  role = "employee"
+  salary = 125000
+  superiorId = "64f1a2b3c4d5e6f7g8h9i0k"
+  profilePicture = "/uploads/profile-pictures/john.jpg"
+  isActive = true
+  isSuspended = false
+  suspensionReason = null
+  suspendedAt = null
+  reinstatedAt = null
+}
+
+object "janeSmith : Employee" as janeSmith {
+  _id = "64f1a2b3c4d5e6f7g8h9i0k"
+  name = "Jane Smith"
+  email = "jane.smith@company.com"
+  password = "$2a$10$..."
+  role = "superior"
+  salary = 225000
+  superiorId = null
+  profilePicture = "/uploads/profile-pictures/jane.jpg"
+  isActive = true
+  isSuspended = false
+  suspensionReason = null
+  suspendedAt = null
+  reinstatedAt = null
+}
+
+object "attendance1 : Attendance" as attendance1 {
+  _id = "64f1a2b3c4d5e6f7g8h9i0l"
+  employeeId = "64f1a2b3c4d5e6f7g8h9i0j"
+  date = "2024-01-15"
+  checkIn = "2024-01-15T08:00:00Z"
+  checkOut = "2024-01-15T17:00:00Z"
+  checkInLat = 3.8370057
+  checkInLng = 11.5335042
+  checkOutLat = 3.8370057
+  checkOutLng = 11.5335042
+  expectedEnd = "2024-01-15T17:00:00Z"
+  overtimeStart = null
+  overtimeEnd = null
+  overtimeCheckedOut = false
+}
+
+object "leaveRequest1 : LeaveRequest" as leaveRequest1 {
+  _id = "64f1a2b3c4d5e6f7g8h9i0m"
+  employeeId = "64f1a2b3c4d5e6f7g8h9i0j"
+  superiorId = "64f1a2b3c4d5e6f7g8h9i0k"
+  startDate = "2024-02-01"
+  endDate = "2024-02-05"
+  reason = "Family vacation"
+  type = "employee"
+  status = "Pending"
+  adminNotes = ""
+  createdAt = "2024-01-20T10:00:00Z"
+  updatedAt = "2024-01-20T10:00:00Z"
+}
+
+object "justification1 : Justification" as justification1 {
+  _id = "64f1a2b3c4d5e6f7g8h9i0n"
+  employeeId = "64f1a2b3c4d5e6f7g8h9i0j"
+  superiorId = "64f1a2b3c4d5e6f7g8h9i0k"
+  date = "2024-01-10"
+  reason = "Doctor appointment"
+  type = "employee"
+  status = "Pending"
+  adminNotes = ""
+  processedAt = null
+  createdAt = "2024-01-09T14:00:00Z"
+  updatedAt = "2024-01-09T14:00:00Z"
+}
+
+johnDoe --> janeSmith : supervises
+johnDoe --> attendance1 : has
+johnDoe --> leaveRequest1 : submits
+johnDoe --> justification1 : submits
+
+@enduml

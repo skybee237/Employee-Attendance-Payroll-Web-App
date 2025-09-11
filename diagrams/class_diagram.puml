@@ -1,0 +1,124 @@
+@startuml Class Diagram
+
+class Employee {
+  - _id: ObjectId
+  - name: String
+  - email: String
+  - password: String
+  - role: String
+  - salary: Number
+  - superiorId: ObjectId
+  - profilePicture: String
+  - isActive: Boolean
+  - isSuspended: Boolean
+  - suspensionReason: String
+  - suspendedAt: Date
+  - reinstatedAt: Date
+  + hashPassword()
+  + comparePassword(password: String): Boolean
+}
+
+class Attendance {
+  - _id: ObjectId
+  - employeeId: ObjectId
+  - date: Date
+  - checkIn: Date
+  - checkOut: Date
+  - checkInLat: Number
+  - checkInLng: Number
+  - checkOutLat: Number
+  - checkOutLng: Number
+  - expectedEnd: Date
+  - overtimeStart: Date
+  - overtimeEnd: Date
+  - overtimeCheckedOut: Boolean
+}
+
+class LeaveRequest {
+  - _id: ObjectId
+  - employeeId: ObjectId
+  - superiorId: ObjectId
+  - startDate: Date
+  - endDate: Date
+  - reason: String
+  - type: String
+  - status: String
+  - adminNotes: String
+  - createdAt: Date
+  - updatedAt: Date
+}
+
+class Justification {
+  - _id: ObjectId
+  - employeeId: ObjectId
+  - superiorId: ObjectId
+  - date: Date
+  - reason: String
+  - type: String
+  - status: String
+  - adminNotes: String
+  - processedAt: Date
+  - createdAt: Date
+  - updatedAt: Date
+}
+
+class PasswordRequest {
+  - _id: ObjectId
+  - employeeId: ObjectId
+  - email: String
+  - status: String
+  - requestedAt: Date
+  - resetToken: String
+  - tokenExpiry: Date
+  - type: String
+}
+
+class AuthController {
+  + login(req, res)
+  + forgotPassword(req, res)
+  + getRole(req, res)
+  + logout(req, res)
+  + getProfile(req, res)
+  + updateProfile(req, res)
+  - getDistanceFromLatLonInMeters(lat1, lng1, lat2, lng2): Number
+  - getLocationFromIP(ip): Object
+}
+
+class AdminController {
+  + createEmployee(req, res)
+  + getSuperiors(req, res)
+  + listEmployees(req, res)
+  + getAllLeaves(req, res)
+  + getAllJustifications(req, res)
+  + suspendEmployee(req, res)
+  + deleteEmployee(req, res)
+  + reinstateEmployee(req, res)
+  + updateEmployee(req, res)
+  + getAdminStats(req, res)
+  + getSuperiorLeaveDemands(req, res)
+  + getSuperiorJustifications(req, res)
+  + processSuperiorLeaveDemand(req, res)
+  + processSuperiorJustification(req, res)
+}
+
+class PayrollController {
+  + calculatePayroll(req, res)
+  + getAllPayroll(req, res)
+  - calculateHoursWorked(checkIn, checkOut): Number
+}
+
+Employee ||--o{ Attendance : has
+Employee ||--o{ LeaveRequest : submits
+Employee ||--o{ Justification : submits
+Employee ||--o{ PasswordRequest : requests
+Employee ||--o{ Employee : supervises
+
+AuthController ..> Employee : uses
+AdminController ..> Employee : manages
+AdminController ..> LeaveRequest : processes
+AdminController ..> Justification : processes
+AdminController ..> Attendance : views
+PayrollController ..> Employee : calculates for
+PayrollController ..> Attendance : uses data from
+
+@enduml

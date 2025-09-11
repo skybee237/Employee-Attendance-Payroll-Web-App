@@ -431,9 +431,9 @@ const Attendance = ({ employeeId }) => {
 
           <button
             onClick={handleCheckOut}
-            disabled={actionLoading.checkOut || !currentStatus?.isCheckedIn}
+            disabled={actionLoading.checkOut || !currentStatus?.isCheckedIn || !isAfterSixPM()}
             className={`px-6 py-3 rounded-lg font-medium transition-colors flex items-center ${
-              !currentStatus?.isCheckedIn
+              !currentStatus?.isCheckedIn || !isAfterSixPM()
                 ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
                 : actionLoading.checkOut
                 ? 'bg-red-400 text-white cursor-not-allowed'
@@ -453,6 +453,11 @@ const Attendance = ({ employeeId }) => {
           </button>
         </div>
         
+        {currentStatus?.isCheckedIn && !isAfterSixPM() && (
+          <p className="mt-3 text-sm text-yellow-700 bg-yellow-50 p-2 rounded">
+            ⏰ Check-out is only allowed at or after 6:00 PM
+          </p>
+        )}
         {currentStatus?.isCheckedIn && (
           <p className="mt-3 text-sm text-green-700 bg-green-50 p-2 rounded">
             💡 Don't forget to check out when you leave!
@@ -559,6 +564,11 @@ const Attendance = ({ employeeId }) => {
       </div>
     </div>
   );
+
+  function isAfterSixPM() {
+    const now = new Date();
+    return now.getHours() >= 18;
+  }
 };
 
 export default Attendance;

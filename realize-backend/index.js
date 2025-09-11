@@ -10,6 +10,7 @@ const adminRoutes = require("./routes/admin");
 const authRoutes = require("./routes/auth");
 const passwordRoutes = require("./routes/password");
 const profilePictureRoutes = require("./routes/profilePicture");
+const payrollRoutes = require("./routes/payroll");
 const { verifyToken } = require("./middleware/authMiddleware");
 
 
@@ -43,6 +44,7 @@ app.use("/api/justification", verifyToken, justificationRoutes);
 app.use("/api/superior", verifyToken, superiorRoutes);
 app.use("/api/admin", verifyToken, adminRoutes);
 app.use("/api/profile-picture", verifyToken, profilePictureRoutes);
+app.use("/api/payroll", verifyToken, payrollRoutes);
 app.use("/api/password", passwordRoutes);
 
 const PORT = process.env.PORT || 5000;

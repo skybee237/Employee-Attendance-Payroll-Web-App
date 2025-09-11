@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import API from "../api";
 import Card from "../components/Card";
 import { toast } from "react-toastify";
+import jsPDF from "jspdf";
 
 const AdminDashboard = () => {
   const navigate = useNavigate();
@@ -19,10 +20,12 @@ const AdminDashboard = () => {
   const [passwordRequests, setPasswordRequests] = useState([]);
   const [quickActions] = useState([
     { id: 1, title: "Create Employee", icon: "👥", path: "/create-employee", color: "blue" },
-    { id: 2, title: "Manage Superior Requests", icon: "📋", path: "/admin/superior-management", color: "yellow" },
-    { id: 3, title: "Process Justifications", icon: "📝", path: "/admin/justifications-management", color: "red" },
-    { id: 4, title: "Password Requests", icon: "🔐", path: "#", color: "purple" },
-    { id: 5, title: "Reports", icon: "📊", path: "/admin/reports", color: "green" }
+    { id: 2, title: "Manage Employees", icon: "👨‍💼", path: "/admin/manage-employees", color: "indigo" },
+    { id: 3, title: "Manage Superior Requests", icon: "📋", path: "/admin/superior-management", color: "yellow" },
+    { id: 4, title: "Process Justifications", icon: "📝", path: "/admin/justifications-management", color: "red" },
+    { id: 5, title: "Password Requests", icon: "🔐", path: "#", color: "purple" },
+    { id: 6, title: "Reports", icon: "📊", path: "/admin/reports", color: "green" },
+    { id: 7, title: "Payroll", icon: "💰", path: "/admin/payroll", color: "teal" }
   ]);
 
   const fetchStats = async () => {
@@ -111,6 +114,70 @@ const AdminDashboard = () => {
     }
   };
 
+  const exportToCSV = (data, filename) => {
+    if (!data || data.length === 0) {
+      toast.warning("No data to export");
+      return;
+    }
+
+    const headers = Object.keys(data[0]).join(',');
+    const rows = data.map(row =>
+      Object.values(row).map(value =>
+        typeof value === 'string' && value.includes(',') ? `"${value}"` : value
+      ).join(',')
+    ).join('\n');
+
+    const csv = `${headers}\n${rows}`;
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${filename}_${new Date().toISOString().split('T')[0]}.csv`;
+    a.click();
+    window.URL.revokeObjectURL(url);
+    toast.success("Report exported successfully");
+  };
+
+  const exportToPDF = (data, filename, title) => {
+    if (!data || data.length === 0) {
+      toast.warning("No data to export");
+      return;
+    }
+    const doc = new jsPDF();
+    doc.setFontSize(18);
+    doc.text(title, 14, 22);
+    doc.setFontSize(11);
+    doc.setTextColor(100);
+
+    const headers = [Object.keys(data[0])];
+    const rows = data.map(row => Object.values(row));
+
+    // AutoTable plugin can be used if available, else manual table
+    if (doc.autoTable) {
+      doc.autoTable({
+        head: headers,
+        body: rows,
+        startY: 30,
+      });
+    } else {
+      // Simple manual table rendering
+      let y = 30;
+      headers[0].forEach((header, i) => {
+        doc.text(header.toString(), 14 + i * 40, y);
+      });
+      y += 10;
+      rows.forEach(row => {
+        row.forEach((cell, i) => {
+          doc.text(cell ? cell.toString() : '', 14 + i * 40, y);
+        });
+        y += 10;
+      });
+    }
+
+    doc.save(`${filename}_${new Date().toISOString().split('T')[0]}.pdf`);
+    toast.success("Report exported successfully as PDF");
+  };
+
   const handleQuickAction = (action) => {
     if (action.path === "#") {
       // Scroll to password requests section
@@ -192,7 +259,7 @@ const AdminDashboard = () => {
       {/* Quick Actions */}
       <div className="bg-white rounded-lg shadow p-5">
         <h2 className="text-xl font-semibold mb-4 text-gray-800">Quick Actions</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 xl:grid-cols-7 gap-4">
           {quickActions.map((action) => (
             <button
               key={action.id}
@@ -268,7 +335,23 @@ const AdminDashboard = () => {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Recent Activities */}
         <div className="bg-white rounded-lg shadow p-5">
-          <h2 className="text-xl font-semibold mb-4 text-gray-800">Recent Activities</h2>
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-xl font-semibold text-gray-800">Recent Activities</h2>
+            <div className="flex space-x-2">
+              <button
+                className="flex items-center px-3 py-1 bg-green-600 text-white text-sm rounded hover:bg-green-700 transition-colors"
+                onClick={() => exportToCSV(recentActivities, "recent_activities")}
+              >
+                <span className="mr-1">📊</span> CSV
+              </button>
+              <button
+                className="flex items-center px-3 py-1 bg-red-600 text-white text-sm rounded hover:bg-red-700 transition-colors"
+                onClick={() => exportToPDF(recentActivities, "recent_activities", "Recent Activities Report")}
+              >
+                <span className="mr-1">📄</span> PDF
+              </button>
+            </div>
+          </div>
           
           {recentActivities.length === 0 ? (
             <div className="text-center py-8 bg-gray-50 rounded-lg">
@@ -312,8 +395,24 @@ const AdminDashboard = () => {
 
         {/* Password Requests */}
         <div id="password-requests-section" className="bg-white rounded-lg shadow p-5">
-          <h2 className="text-xl font-semibold mb-4 text-gray-800">Pending Password Requests</h2>
-          
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-xl font-semibold text-gray-800">Pending Password Requests</h2>
+            <div className="flex space-x-2">
+              <button
+                className="flex items-center px-3 py-1 bg-green-600 text-white text-sm rounded hover:bg-green-700 transition-colors"
+                onClick={() => exportToCSV(passwordRequests, "password_requests")}
+              >
+                <span className="mr-1">📊</span> CSV
+              </button>
+              <button
+                className="flex items-center px-3 py-1 bg-red-600 text-white text-sm rounded hover:bg-red-700 transition-colors"
+                onClick={() => exportToPDF(passwordRequests, "password_requests", "Password Requests Report")}
+              >
+                <span className="mr-1">📄</span> PDF
+              </button>
+            </div>
+          </div>
+
           {passwordRequests.length === 0 ? (
             <div className="text-center py-8 bg-gray-50 rounded-lg">
               <p className="text-gray-500">No pending password requests.</p>

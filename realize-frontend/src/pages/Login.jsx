@@ -13,11 +13,10 @@ function getDistanceFromLatLonInMeters(lat1, lon1, lat2, lon2) {
   const dLat = ((lat2 - lat1) * Math.PI) / 180;
   const dLon = ((lon2 - lon1) * Math.PI) / 180;
   const a =
-    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.sin(dLat / 2) ** 2 +
     Math.cos((lat1 * Math.PI) / 180) *
       Math.cos((lat2 * Math.PI) / 180) *
-      Math.sin(dLon / 2) *
-      Math.sin(dLon / 2);
+      Math.sin(dLon / 2) ** 2;
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   return R * c;
 }
@@ -31,69 +30,54 @@ const Login = ({ setEmployeeId, setRole, setUserEmail }) => {
   const [locationStatus, setLocationStatus] = useState("");
   const navigate = useNavigate();
 
-  const validateEmail = (email) => {
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    return emailRegex.test(email);
-  };
-
-  const validatePassword = (password) => {
-    return password && password.length >= 6;
-  };
+  const validateEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+  const validatePassword = (password) => password && password.length >= 6;
 
   const handleLogin = async (e) => {
     e.preventDefault();
-
-    // Reset error state
     setError("");
 
-    // Comprehensive validation
-    if (!email || !password) {
-      setError("Please fill in all fields");
-      return;
-    }
-
-    if (!validateEmail(email)) {
-      setError("Please enter a valid email address");
-      return;
-    }
-
-    if (!validatePassword(password)) {
-      setError("Password must be at least 6 characters long");
-      return;
-    }
+    if (!email || !password) return setError("Please fill in all fields");
+    if (!validateEmail(email)) return setError("Please enter a valid email address");
+    if (!validatePassword(password))
+      return setError("Password must be at least 6 characters long");
 
     setLoading(true);
     setLocationStatus("Checking user role...");
 
     try {
-      // Get user role first
+      // Get user role from backend
       const roleRes = await API.post("/api/auth/getRole", { email });
       const role = roleRes.data;
       console.log("User role:", role);
 
-      // Admin login (anywhere) - no location required
       if (role === "admin") {
+        // Admin login: skip geolocation
         setLocationStatus("Admin login detected...");
-        const loginRes = await API.post("/api/auth/login", { email, password });
-        console.log("Admin login successful");
-        localStorage.setItem("token", loginRes.data.token);
-        localStorage.setItem("userRole", role);
-        localStorage.setItem("userEmail", email);
-        localStorage.setItem("employeeId", loginRes.data.employeeId);
-        localStorage.setItem("userName", loginRes.data.name || email.split('@')[0]);
-        // Update App.jsx state
-        setEmployeeId(loginRes.data.employeeId);
-        setRole(role);
-        setUserEmail(email);
-        console.log("About to navigate to /admin");
-        navigate("/admin", { replace: true });
-        console.log("Navigation called, should redirect now");
+        try {
+          const loginRes = await API.post("/api/auth/login", { email, password });
+          localStorage.setItem("token", loginRes.data.token);
+          localStorage.setItem("userRole", role);
+          localStorage.setItem("userEmail", email);
+          localStorage.setItem("employeeId", loginRes.data.employeeId);
+          localStorage.setItem("userName", loginRes.data.name || email.split("@")[0]);
+
+          setEmployeeId(loginRes.data.employeeId);
+          setRole(role);
+          setUserEmail(email);
+          navigate("/admin", { replace: true });
+        } catch (err) {
+          console.error("Admin login error:", err.response?.data || err.message);
+          setError(err.response?.data?.error || "Login failed. Please try again.");
+        } finally {
+          setLoading(false);
+          setLocationStatus("");
+        }
         return;
       }
 
-      // Employee/Superior login requires location check
+      // Employee / Superior login: require geolocation
       setLocationStatus("Getting your location...");
-
       if (!navigator.geolocation) {
         setError("Geolocation is not supported by your browser");
         setLoading(false);
@@ -105,24 +89,26 @@ const Login = ({ setEmployeeId, setRole, setUserEmail }) => {
           const { latitude, longitude } = position.coords;
           setLocationStatus("Checking location...");
 
-          try {
-            console.log("Attempting login with:", { email, latitude, longitude });
+          const distance = getDistanceFromLatLonInMeters(
+            latitude,
+            longitude,
+            SITE_LOCATION.lat,
+            SITE_LOCATION.lng
+          );
 
-            // Employee login requires location check
-            const distance = getDistanceFromLatLonInMeters(
-              latitude,
-              longitude,
-              SITE_LOCATION.lat,
-              SITE_LOCATION.lng
+          setLocationStatus(`You are ${Math.round(distance)}m from site`);
+
+          if (distance > MAX_DISTANCE_METERS) {
+            setError(
+              `You must be within ${MAX_DISTANCE_METERS}m of the site to login. Current distance: ${Math.round(
+                distance
+              )}m`
             );
+            setLoading(false);
+            return;
+          }
 
-            setLocationStatus(`You are ${Math.round(distance)}m from site`);
-
-            if (distance > MAX_DISTANCE_METERS) {
-              setError(`You must be within ${MAX_DISTANCE_METERS}m of the site to login. Current distance: ${Math.round(distance)}m`);
-              setLoading(false);
-              return;
-            }
+          try {
             const loginRes = await API.post("/api/auth/login", {
               email,
               password,
@@ -130,37 +116,29 @@ const Login = ({ setEmployeeId, setRole, setUserEmail }) => {
               longitude,
             });
 
-            if (role === "superior") {
-              console.log("Superior login successful");
-            } else {
-              console.log("Employee login successful");
-            }
             localStorage.setItem("token", loginRes.data.token);
             localStorage.setItem("userRole", role);
             localStorage.setItem("userEmail", email);
             localStorage.setItem("employeeId", loginRes.data.employeeId);
-            localStorage.setItem("userName", loginRes.data.name || email.split('@')[0]);
-            // Update App.jsx state
+            localStorage.setItem(
+              "userName",
+              loginRes.data.name || email.split("@")[0]
+            );
+
             setEmployeeId(loginRes.data.employeeId);
             setRole(role);
             setUserEmail(email);
-
-            // Redirect based on role
             navigate("/", { replace: true });
-
-          }
-          catch (err) {
+          } catch (err) {
             console.error("Login error details:", {
               status: err.response?.status,
               data: err.response?.data,
-              message: err.message
+              message: err.message,
             });
-
-            const errorMessage = err.response?.data?.error ||
-                               err.response?.data?.message ||
-                               "Login failed. Please check your credentials and try again.";
-
-            setError(errorMessage);
+            setError(
+              err.response?.data?.error ||
+                "Login failed. Please check your credentials and try again."
+            );
           } finally {
             setLoading(false);
             setLocationStatus("");
@@ -168,17 +146,21 @@ const Login = ({ setEmployeeId, setRole, setUserEmail }) => {
         },
         (err) => {
           console.error("Geolocation error:", err);
-          let geoError = "Location access is required to login. Please enable location services.";
+          let geoError =
+            "Location access is required to login. Please enable location services.";
 
-          switch(err.code) {
+          switch (err.code) {
             case err.PERMISSION_DENIED:
-              geoError = "Location access denied. Please enable location permissions in your browser settings.";
+              geoError =
+                "Location access denied. Please enable location permissions in your browser settings.";
               break;
             case err.POSITION_UNAVAILABLE:
-              geoError = "Location information unavailable. Please check your internet connection.";
+              geoError =
+                "Location information unavailable. Please check your internet connection.";
               break;
             case err.TIMEOUT:
-              geoError = "Location request timed out. Please try again.";
+              geoError =
+                "Location request timed out. Retrying with lower accuracy...";
               break;
           }
 
@@ -188,16 +170,15 @@ const Login = ({ setEmployeeId, setRole, setUserEmail }) => {
         },
         {
           enableHighAccuracy: true,
-          timeout: 10000,
-          maximumAge: 300000
+          timeout: 20000,
+          maximumAge: 0,
         }
       );
     } catch (err) {
       console.error("Role check error:", err);
-      const errorMessage = err.response?.data?.error ||
-                         err.response?.data?.message ||
-                         "Failed to check user role. Please try again.";
-      setError(errorMessage);
+      setError(
+        err.response?.data?.error || "Failed to check user role. Please try again."
+      );
       setLoading(false);
       setLocationStatus("");
     }
@@ -215,7 +196,6 @@ const Login = ({ setEmployeeId, setRole, setUserEmail }) => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
       <div className="w-full max-w-md">
-        {/* Header */}
         <div className="text-center mb-8">
           <div className="flex items-center justify-center mb-4">
             <div className="w-12 h-12 bg-blue-600 rounded-lg flex items-center justify-center mr-3">
@@ -226,9 +206,10 @@ const Login = ({ setEmployeeId, setRole, setUserEmail }) => {
           <p className="text-gray-600">Sign in to access your HR portal</p>
         </div>
 
-        {/* Login Card */}
         <div className="bg-white rounded-2xl shadow-xl p-8">
-          <h2 className="text-2xl font-semibold text-gray-800 mb-6 text-center">Welcome Back</h2>
+          <h2 className="text-2xl font-semibold text-gray-800 mb-6 text-center">
+            Welcome Back
+          </h2>
 
           {error && (
             <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg flex items-center">
@@ -238,7 +219,6 @@ const Login = ({ setEmployeeId, setRole, setUserEmail }) => {
           )}
 
           <form onSubmit={handleLogin} className="space-y-5">
-            {/* Email Field */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Email Address
@@ -258,7 +238,6 @@ const Login = ({ setEmployeeId, setRole, setUserEmail }) => {
               </div>
             </div>
 
-            {/* Password Field */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Password
@@ -289,15 +268,11 @@ const Login = ({ setEmployeeId, setRole, setUserEmail }) => {
               </div>
             </div>
 
-            {/* Location Info */}
             <div className="flex items-center text-sm text-gray-600 bg-blue-50 p-3 rounded-lg">
               <MapPin className="w-4 h-4 mr-2 text-blue-500" />
-              <span>
-                {locationStatus || "Location-based authentication required"}
-              </span>
+              <span>{locationStatus || "Location-based authentication required"}</span>
             </div>
 
-            {/* Login Button */}
             <button
               type="submit"
               disabled={loading}
@@ -316,9 +291,8 @@ const Login = ({ setEmployeeId, setRole, setUserEmail }) => {
                 "Sign In"
               )}
             </button>
-          </form> 
+          </form>
 
-          {/* Footer Links */}
           <div className="mt-6 text-center">
             <Link
               to="/forgot-password"
@@ -329,7 +303,6 @@ const Login = ({ setEmployeeId, setRole, setUserEmail }) => {
           </div>
         </div>
 
-        {/* Company Info */}
         <div className="text-center mt-8">
           <p className="text-sm text-gray-500">
             © 2023 {COMPANY_NAME}. All rights reserved.

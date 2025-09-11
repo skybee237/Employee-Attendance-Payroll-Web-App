@@ -6,6 +6,7 @@ const leaveSchema = new mongoose.Schema({
   startDate: Date,
   endDate: Date,
   reason: String,
+  duration: { type: Number, default: 0 },
   type: { 
     type: String, 
     enum: ["employee", "superior_demand"], 
